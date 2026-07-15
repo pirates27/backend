@@ -11,6 +11,7 @@ The application is deployed and running live in the AWS Mumbai region. The netwo
 * **Base URL**: `http://landlens-production-alb-1919392235.ap-south-1.elb.amazonaws.com`
 * **Health Check (Actuator)**: `http://landlens-production-alb-1919392235.ap-south-1.elb.amazonaws.com/actuator/health`
 * **Swagger Documentation** (Enabled in dev, disabled in prod for security): `http://landlens-production-alb-1919392235.ap-south-1.elb.amazonaws.com/swagger-ui/index.html`
+* **Production Database (Hostinger)**: `srv1117.hstgr.io:3306` (Schema: `u833088220_LL`, User: `u833088220_LL`)
 
 ### Egress & Whitelisting
 To allow connection to external database engines (e.g. Hostinger VPS or external MySQL nodes), the outbound egress traffic flows through an Elastic IP associated with the NAT Gateway:
