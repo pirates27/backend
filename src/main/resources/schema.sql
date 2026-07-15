@@ -1,8 +1,9 @@
 -- LandLens Production Database Schema Script (MySQL Compatibility)
 -- 3NF Relational Database Schema with UUID VARCHAR(36) Primary Keys and Constraints
 
-CREATE DATABASE IF NOT EXISTS u833088220_land_lens;
-USE u833088220_land_lens;
+-- Database creation and selection are managed by the active JDBC datasource connection
+-- CREATE DATABASE IF NOT EXISTS u833088220_land_lens;
+-- USE u833088220_land_lens;
 
 -- 1. roles
 CREATE TABLE IF NOT EXISTS roles (
