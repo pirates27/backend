@@ -1,5 +1,5 @@
 # LandLens Complete API Verification Script
-$baseUrl = "http://localhost:8080"
+$baseUrl = "http://landlens-production-alb-1919392235.ap-south-1.elb.amazonaws.com"
 $ErrorActionPreference = "Continue"
 
 Write-Host "=============================================" -ForegroundColor Cyan
