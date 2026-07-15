@@ -1,0 +1,41 @@
+# Local directories & builds
+target/
+build/
+.gradle/
+.mvn/
+*.jar
+*.war
+*.zip
+*.tar.gz
+
+# Source version control
+.git/
+.github/
+.gitignore
+.gitattributes
+
+# IDE configurations
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.project
+.classpath
+.settings/
+
+# Deployment & Docker scripts
+Dockerfile
+docker-compose.yml
+.dockerignore
+*.sh
+*.ps1
+deploy-guides/
+terraform/
+.terraform/
+terraform.tfstate*
+
+# Documentation & Audit logs
+*.md
+logs/
+temp/

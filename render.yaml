@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: landlens-backend
+    env: docker
+    plan: starter
+    region: oregon
+    branch: main
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: DB_URL
+        sync: false # User to supply their database url in Render dashboard
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: PORT
+        value: 8080

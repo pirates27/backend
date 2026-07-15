@@ -1,0 +1,28 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: landlens-backend
+  labels:
+    cloud.amazonaws.com/location: us-central1
+spec:
+  template:
+    spec:
+      containers:
+        - image: gcr.io/landlens-gcp-project/landlens-backend:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: prod
+            - name: DB_URL
+              value: "jdbc:mysql://srv1117.hstgr.io:3306/u833088220_land_lens?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+            - name: DB_USERNAME
+              value: "u833088220_admin"
+            - name: DB_PASSWORD
+              value: "Land_lens_1"
+            - name: JWT_SECRET
+              value: "9a2f3f4e5d6c7b8a9f0e1d2c3b4a5f6e7d8c9b0a1f2e3d4c5b6a7f8e9d0c1b2a3"
+          resources:
+            limits:
+              memory: 1Gi
+              cpu: "1"
