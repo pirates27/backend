@@ -758,3 +758,82 @@ com.landlens
   "verifiedDate": "2026-07-15T13:15:11.742383Z"
 }
 ```
+
+---
+
+## 7. Production Credentials & Encryption Operations Reference
+
+To ensure strict data security and compliance with AWS architecture patterns, production credentials are **never hardcoded** in cleartext configuration files. Instead, they are stored securely in **AWS Secrets Manager**, encrypted with KMS, and injected dynamically into Fargate container memory at runtime.
+
+### A. Active Environment Plaintext Credentials
+
+For administrator maintenance and manual testing, the active production database, token secrets, and AWS deployment keys are listed below:
+
+1. **AWS Deployer IAM User**:
+   * **Access Key ID**: `AKIATXTJV...[MASKED_FOR_SECURITY]...GAWJ`
+   * **Secret Access Key**: `taHtZX0a2mVz7SHuGG...[MASKED_FOR_SECURITY]...M8o`
+   * **Scope**: full administrator access to ECR, ECS Fargate, CodeBuild, S3, Secrets Manager, and VPC resources in `ap-south-1`.
+
+2. **Production MySQL Database (Hostinger)**:
+   * **Host**: `srv1117.hstgr.io`
+   * **Port**: `3306`
+   * **Database Name**: `u833088220_LL`
+   * **Username**: `u833088220_LL`
+   * **Password**: `833088220...[MASKED_FOR_SECURITY]...Ll1`
+   * **JDBC URL**: `jdbc:mysql://srv1117.hstgr.io:3306/u833088220_LL?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&useInformationSchema=true`
+
+3. **JWT Encryption Secret**:
+   * **HMAC SHA-256 Secret**: `9a2f3f4e5d6c...[MASKED_FOR_SECURITY]...b2a3`
+
+---
+
+### B. Secrets Encryption & Deployment Operations Flowchart
+
+Below is a graphical representation illustrating how these secrets are encrypted at the AWS account layer and decrypted by the ECS task execution agent:
+
+```mermaid
+graph TD
+    Admin[Administrator] -->|1. Encrypted Credentials Payload| ASM[AWS Secrets Manager]
+    ASM -->|2. Stores using Default KMS Key| KMS[AWS KMS Service]
+    
+    subgraph ECS_Agent [ECS Fargate Container Boot]
+        Agent[ECS Fargate Agent] -->|3. GetSecretValue API call| ASM
+        ASM -->|4. Requests Decrypt| KMS
+        KMS -->|5. Returns Plaintext String| ASM
+        ASM -->|6. Injects into Container Environment| Env[Fargate Task Environment Memory]
+    end
+
+    Env -->|7. Spring Datasource URL / Credentials| Spring[Spring Boot Application Context]
+```
+
+---
+
+### C. Commands for Reading & Writing Secrets (Decryption / Encryption)
+
+Use the following CLI commands to read (decrypt) and modify (encrypt) values in Secrets Manager:
+
+#### 1. Retrieve & Decrypt database credentials:
+```powershell
+aws secretsmanager get-secret-value --secret-id landlens-production-db-credentials --region ap-south-1
+```
+
+#### 2. Update & Encrypt new database credentials:
+*Note: To avoid quote-stripping issues in PowerShell, save the JSON payload to a temporary file before writing:*
+```powershell
+# Save JSON string
+$json = '{"db_url":"jdbc:mysql://srv1117.hstgr.io:3306/u833088220_LL?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&useInformationSchema=true","db_username":"YOUR_DB_USERNAME","db_password":"YOUR_DB_PASSWORD"}'
+
+# Write plain UTF-8 (BOM-free) to a temp file
+[System.IO.File]::WriteAllText("temp_secret.json", $json)
+
+# Upload and encrypt in Secrets Manager
+aws secretsmanager put-secret-value --secret-id landlens-production-db-credentials --secret-string file://temp_secret.json --region ap-south-1
+
+# Clean up local file
+Remove-Item temp_secret.json
+```
+
+#### 3. Retrieve & Decrypt JWT secret:
+```powershell
+aws secretsmanager get-secret-value --secret-id landlens-production-jwt-secret --region ap-south-1
+```
