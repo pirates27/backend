@@ -18,7 +18,82 @@ To allow connection to external database engines (e.g. Hostinger VPS or external
 
 ---
 
-## 2. Relational Database Design & Schema Specification
+## 2. Backend System Architecture & Request Flows
+
+Below are the graphical representations illustrating how request traffic flows through the infrastructure and the internal request processing pipeline of the Spring Boot application container.
+
+### A. Infrastructure & Network Topology
+
+This diagram details the path client requests take from the public internet, routing through the Load Balancer, to the containers running inside private subnets, and finally communicating with your Hostinger database:
+
+```mermaid
+graph TD
+    Client[Client / Frontend Web & Mobile] -->|1. HTTP Request / Port 80| ALB[Application Load Balancer]
+    
+    subgraph VPC [AWS VPC - Mumbai Region ap-south-1]
+        ALB -->|2. Routes Traffic| TG[Target Group]
+        
+        subgraph PublicSubnets [Public Subnets]
+            ALB
+            NAT[NAT Gateway]
+        end
+
+        subgraph PrivateSubnets [Private Subnets]
+            TG -->|3. Forwards to Port 8080| ECS[ECS Fargate Tasks]
+            ECS -->|4. Secure Outbound Traffic| NAT
+        end
+    end
+
+    NAT -->|5. Connects via Egress IP: 13.207.227.126| DB[(Hostinger Remote MySQL Database)]
+    ECS -->|6. Asynchronous Verification| AI[AI Trust Engine & OCR Task]
+```
+
+### B. Application Request Processing Lifecycle
+
+This sequence diagram shows how requests (e.g. creating properties or document uploads) are intercepted by Spring Security, processed by the business controllers/services, and saved to the MySQL database:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client
+    participant Security as Spring Security Filter Chain
+    participant Controller as REST Controller
+    participant Service as Service Layer
+    participant Repos as JPA Repository
+    participant DB as Hostinger MySQL DB
+    participant AI as AI Engine & OCR
+
+    Client->>Security: Send HTTP Request (e.g., POST /api/properties)
+    alt Anonymous path permitted (e.g., /actuator/health)
+        Security->>Controller: Forward to Controller
+    else Protected path
+        Note over Security: Validate JWT token from Authorization header
+        alt JWT Valid
+            Security->>Controller: Forward with Auth Principal
+        else JWT Invalid / Missing
+            Security-->>Client: Return 401 Unauthorized / 403 Forbidden
+        end
+    end
+
+    Controller->>Service: Call Business Logic (e.g., createProperty)
+    Service->>Repos: Invoke Database Operation
+    Repos->>DB: Query / Insert / Update (SQL)
+    DB-->>Repos: Return Result Sets
+    Repos-->>Service: Return Entity Model
+
+    opt Needs AI Verification (Documents Uploaded)
+        Service->>AI: Trigger Asynchronous Verification Task
+        Note over AI: Process OCR (Patta/Sale Deed) & evaluate Trust Score
+        AI->>DB: Update Verification Results & Scores
+    end
+
+    Service-->>Controller: Return DTO Payload
+    Controller-->>Client: Return JSON Response + HTTP Status 200/201
+```
+
+---
+
+## 3. Relational Database Design & Schema Specification
 
 The database utilizes a **3NF (Third Normal Form)** relational database schema structured with `UUID` primary keys (`VARCHAR(36)`) and foreign key constraints to maintain strict referential integrity.
 
