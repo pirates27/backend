@@ -44,3 +44,6 @@ build/
 terraform.exe
 *.zip
 
+# Local credentials reference
+credentials.txt
+
