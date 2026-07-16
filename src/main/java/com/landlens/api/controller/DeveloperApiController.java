@@ -55,7 +55,7 @@ public class DeveloperApiController {
     public ResponseEntity<?> revokeKey(@PathVariable UUID id, Principal principal) {
         UUID userId = UUID.fromString(principal.getName());
         developerApiService.revokeApiKey(id, userId);
-        return ResponseEntity.ok("API key revoked successfully");
+        return ResponseEntity.ok(Map.of("message", "API key revoked successfully"));
     }
 
     @GetMapping("/keys/{id}/logs")

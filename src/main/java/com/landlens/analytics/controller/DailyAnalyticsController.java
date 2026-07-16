@@ -25,7 +25,7 @@ public class DailyAnalyticsController {
     private DailyAnalyticsService analyticsService;
 
     @GetMapping("/dashboard")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GOVERNMENT_OFFICER')")
     public ResponseEntity<DailyAnalyticsResponseDto> getDashboardMetrics(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         

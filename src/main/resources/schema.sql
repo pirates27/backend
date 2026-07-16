@@ -388,23 +388,23 @@ CREATE TABLE IF NOT EXISTS daily_analytics (
     is_active TINYINT(1) NOT NULL DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Indexes for performance optimizations
-CREATE INDEX idx_users_role ON users(role_id);
-CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
-CREATE INDEX idx_login_histories_user_time ON login_histories(user_id, login_timestamp);
-CREATE INDEX idx_properties_location ON properties(district, village, state);
-CREATE INDEX idx_properties_coordinates ON properties(latitude, longitude);
-CREATE INDEX idx_properties_status ON properties(status);
-CREATE INDEX idx_properties_provider ON properties(provider_id);
-CREATE INDEX idx_property_images_display ON property_images(property_id, display_order);
-CREATE INDEX idx_property_docs_type ON property_documents(property_id, document_type);
-CREATE INDEX idx_verification_timelines_time ON verification_timelines(property_id, timestamp);
-CREATE INDEX idx_duplicate_claims_pair ON duplicate_claims(property_a_id, property_b_id);
-CREATE INDEX idx_fraud_reports_prop ON fraud_reports(property_id);
-CREATE INDEX idx_property_visits_buyer ON property_visits(buyer_id);
-CREATE INDEX idx_saved_properties_buyer ON saved_properties(buyer_id);
-CREATE INDEX idx_notifications_receiver_read ON notifications(receiver_id, is_read);
-CREATE INDEX idx_ai_messages_conv ON ai_messages(conversation_id);
-CREATE INDEX idx_api_keys_user ON api_keys(user_id);
-CREATE INDEX idx_api_usages_date ON api_usages(usage_date);
-CREATE INDEX idx_api_logs_key_time ON api_logs(api_key_id, request_timestamp);
+-- Indexes for performance optimizations (Created during initial table setup)
+-- CREATE INDEX idx_users_role ON users(role_id);
+-- CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
+-- CREATE INDEX idx_login_histories_user_time ON login_histories(user_id, login_timestamp);
+-- CREATE INDEX idx_properties_location ON properties(district, village, state);
+-- CREATE INDEX idx_properties_coordinates ON properties(latitude, longitude);
+-- CREATE INDEX idx_properties_status ON properties(status);
+-- CREATE INDEX idx_properties_provider ON properties(provider_id);
+-- CREATE INDEX idx_property_images_display ON property_images(property_id, display_order);
+-- CREATE INDEX idx_property_docs_type ON property_documents(property_id, document_type);
+-- CREATE INDEX idx_verification_timelines_time ON verification_timelines(property_id, timestamp);
+-- CREATE INDEX idx_duplicate_claims_pair ON duplicate_claims(property_a_id, property_b_id);
+-- CREATE INDEX idx_fraud_reports_prop ON fraud_reports(property_id);
+-- CREATE INDEX idx_property_visits_buyer ON property_visits(buyer_id);
+-- CREATE INDEX idx_saved_properties_buyer ON saved_properties(buyer_id);
+-- CREATE INDEX idx_notifications_receiver_read ON notifications(receiver_id, is_read);
+-- CREATE INDEX idx_ai_messages_conv ON ai_messages(conversation_id);
+-- CREATE INDEX idx_api_keys_user ON api_keys(user_id);
+-- CREATE INDEX idx_api_usages_date ON api_usages(usage_date);
+-- CREATE INDEX idx_api_logs_key_time ON api_logs(api_key_id, request_timestamp);
