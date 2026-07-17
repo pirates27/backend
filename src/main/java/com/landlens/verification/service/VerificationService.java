@@ -8,6 +8,7 @@ import com.landlens.verification.model.GovernmentVerification;
 import com.landlens.verification.model.VerificationTimeline;
 import com.landlens.verification.repository.GovernmentVerificationRepository;
 import com.landlens.verification.repository.VerificationTimelineRepository;
+import com.landlens.notification.service.NotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +31,9 @@ public class VerificationService {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private NotificationService notificationService;
 
     @Transactional
     public GovernmentVerification verifyProperty(UUID propertyId, GovernmentVerification review, UUID officerId) {
@@ -69,6 +73,20 @@ public class VerificationService {
         timeline.setTimestamp(Instant.now());
         timeline.setIsActive(true);
         timelineRepository.save(timeline);
+
+        // Send notification
+        try {
+            if (property.getProvider() != null) {
+                notificationService.sendNotification(
+                    property.getProvider().getId(),
+                    "Government Verification Status Update",
+                    "Your property \"" + property.getTitle() + "\" has been " + review.getStatus() + " by records officer " + officer.getLastName() + ". Remarks: " + review.getRemarks(),
+                    "GOVT_AUDIT"
+                );
+            }
+        } catch (Exception e) {
+            // Ignore
+        }
 
         return savedReview;
     }

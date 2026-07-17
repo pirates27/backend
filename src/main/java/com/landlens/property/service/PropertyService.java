@@ -12,6 +12,7 @@ import com.landlens.property.repository.PropertyVisitRepository;
 import com.landlens.property.repository.SavedPropertyRepository;
 import com.landlens.user.model.User;
 import com.landlens.user.repository.UserRepository;
+import com.landlens.notification.service.NotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +43,9 @@ public class PropertyService {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private NotificationService notificationService;
+
     @Transactional
     public Property createProperty(Property property, UUID providerId) {
         User provider = userRepository.findById(providerId)
@@ -52,7 +56,18 @@ public class PropertyService {
         property.setStatus("PENDING_AI");
         property.setIsActive(true);
 
-        return propertyRepository.save(property);
+        Property saved = propertyRepository.save(property);
+        try {
+            notificationService.sendNotification(
+                providerId,
+                "New Property Listing Submitted",
+                "Your property \"" + property.getTitle() + "\" (Survey: " + property.getSurveyNumber() + ") has been listed successfully and is pending AI trust check.",
+                "PROPERTY_SUBMITTED"
+            );
+        } catch (Exception e) {
+            // Ignore
+        }
+        return saved;
     }
 
     public Property getPropertyById(UUID id) {
@@ -104,7 +119,18 @@ public class PropertyService {
         property.setThreeSixtyImageUrl(details.getThreeSixtyImageUrl());
         // Do not update status directly, this is governed by AI & Govt verification flow
         
-        return propertyRepository.save(property);
+        Property saved = propertyRepository.save(property);
+        try {
+            notificationService.sendNotification(
+                providerId,
+                "Property Listing Updated",
+                "Your property \"" + property.getTitle() + "\" (Survey: " + property.getSurveyNumber() + ") has been updated successfully. Verification reviews will re-trigger.",
+                "PROPERTY_UPDATED"
+            );
+        } catch (Exception e) {
+            // Ignore
+        }
+        return saved;
     }
 
     @Transactional
@@ -183,7 +209,19 @@ public class PropertyService {
         visit.setProperty(property);
         visit.setStatus("SCHEDULED");
         visit.setIsActive(true);
-        return propertyVisitRepository.save(visit);
+        PropertyVisit savedVisit = propertyVisitRepository.save(visit);
+
+        try {
+            notificationService.sendNotification(
+                property.getProvider().getId(),
+                "New Site Visit Scheduled",
+                "A buyer has scheduled a site visit for \"" + property.getTitle() + "\" on " + visit.getVisitDate() + " at " + visit.getVisitTime() + ".",
+                "VISIT_SCHEDULED"
+            );
+        } catch (Exception e) {
+            // Ignore
+        }
+        return savedVisit;
     }
 
     @Transactional
@@ -193,7 +231,19 @@ public class PropertyService {
         
         // Allowed roles or users can update. For simplicity, just update status
         visit.setStatus(status.toUpperCase());
-        return propertyVisitRepository.save(visit);
+        PropertyVisit savedVisit = propertyVisitRepository.save(visit);
+
+        try {
+            notificationService.sendNotification(
+                visit.getBuyer().getId(),
+                "Site Visit Status Update",
+                "Your scheduled site visit for \"" + visit.getProperty().getTitle() + "\" has been " + visit.getStatus() + " by the provider.",
+                "VISIT_UPDATED"
+            );
+        } catch (Exception e) {
+            // Ignore
+        }
+        return savedVisit;
     }
 
     public List<PropertyVisit> getBuyerVisits(UUID buyerId) {

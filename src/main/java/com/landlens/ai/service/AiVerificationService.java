@@ -8,12 +8,14 @@ import com.landlens.user.model.User;
 import com.landlens.user.repository.UserRepository;
 import com.landlens.verification.model.VerificationTimeline;
 import com.landlens.verification.repository.VerificationTimelineRepository;
+import com.landlens.notification.service.NotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -30,6 +32,9 @@ public class AiVerificationService {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private NotificationService notificationService;
 
     @Transactional
     public AiVerification triggerAiVerification(UUID propertyId, UUID userId) {
@@ -72,6 +77,32 @@ public class AiVerificationService {
         timeline.setTimestamp(Instant.now());
         timeline.setIsActive(true);
         timelineRepository.save(timeline);
+
+        // Send notifications
+        try {
+            // Notify the provider
+            if (property.getProvider() != null) {
+                notificationService.sendNotification(
+                    property.getProvider().getId(),
+                    "AI Trust Audit Completed",
+                    "AI verification analysis is complete for your property \"" + property.getTitle() + "\". Trust Score: 88.50%. The listing has been routed to the government verification queue.",
+                    "AI_AUDIT"
+                );
+            }
+
+            // Notify all government officers
+            List<User> officers = userRepository.findByRoleName("GOVERNMENT_OFFICER");
+            for (User officer : officers) {
+                notificationService.sendNotification(
+                    officer.getId(),
+                    "New Property Pending Review",
+                    "Property \"" + property.getTitle() + "\" has passed AI Trust Audit with a score of 88.50%. It is now pending your manual records audit.",
+                    "PENDING_AUDIT"
+                );
+            }
+        } catch (Exception e) {
+            // Ignore notification errors to prevent transaction rollback
+        }
 
         return savedReport;
     }
