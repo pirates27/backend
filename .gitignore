@@ -46,4 +46,23 @@ terraform.exe
 
 # Local credentials reference
 credentials.txt
+*.pem
+*.key
+*.jks
+*.p12
+*.pkcs12
+*secret*
+*private*
+*credentials*
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.env
+
+# Application logs
+*.log
+logs/
+**/logs/
 

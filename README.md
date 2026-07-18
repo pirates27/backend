@@ -1,31 +1,66 @@
-# LandLens Backend - Production Deployment & Operations Guide
+# 🌍 LandLens Backend - Production Deployment & Operations Guide
 
-Welcome to the **LandLens** backend production service guide. LandLens is a production-grade relational backend for an AI-powered Land Verification Platform built using **Spring Boot 3.4 (Java 21)** and deployed on **AWS ECS Fargate** with a **Hostinger MySQL** database.
+[![Java Version](https://img.shields.io/badge/Java-21-orange.svg)](https://adoptium.net/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.0-green.svg)](https://spring.io/projects/spring-boot)
+[![Docker](https://img.shields.io/badge/Docker-Enabled-blue.svg)](https://www.docker.com/)
+[![AWS](https://img.shields.io/badge/AWS-ECS%20Fargate-FF9900.svg)](https://aws.amazon.com/ecs/)
+[![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1.svg)](https://www.mysql.com/)
 
----
-
-## 1. Live Deployment & Endpoints (Mumbai - `ap-south-1`)
-
-The application is deployed and running live in the AWS Mumbai region. The network utilizes an Application Load Balancer (ALB) routing to container tasks running on ECS Fargate inside private subnets, egressing through a NAT Gateway.
-
-* **Base URL**: `http://landlens-production-alb-1919392235.ap-south-1.elb.amazonaws.com`
-* **Health Check (Actuator)**: `http://landlens-production-alb-1919392235.ap-south-1.elb.amazonaws.com/actuator/health`
-* **Swagger Documentation** (Enabled in dev, disabled in prod for security): `http://landlens-production-alb-1919392235.ap-south-1.elb.amazonaws.com/swagger-ui/index.html`
-* **Production Database (Hostinger)**: `srv1117.hstgr.io:3306` (Schema: `u833088220_LL`, User: `u833088220_LL`)
-
-### Egress & Whitelisting
-To allow connection to external database engines (e.g. Hostinger VPS or external MySQL nodes), the outbound egress traffic flows through an Elastic IP associated with the NAT Gateway:
-* **NAT Gateway Public Egress IP**: `13.207.227.126` (Must be whitelisted in Hostinger Remote MySQL settings)
+Welcome to the **LandLens** backend production service guide. LandLens is a production-grade relational backend for an AI-powered Land Verification Platform. The system utilizes **Spring Boot 3.4 (Java 21)**, **Spring Security (JWT)**, and **Spring Data JPA (Hibernate)**. It is configured for deployment on **AWS ECS Fargate** with a **Hostinger MySQL** database.
 
 ---
 
-## 2. Backend System Architecture & Request Flows
+## 1. Project Description
 
-Below are the graphical representations illustrating how request traffic flows through the infrastructure and the internal request processing pipeline of the Spring Boot application container.
+**LandLens** is a secure, high-performance web API designed to digitize and automate the land registry verification process. By integrating Optical Character Recognition (OCR), AI-driven duplicate claims detection, and a multi-level review workflow (including government inspectors), LandLens provides a single source of truth for land asset listings. This repository contains the backend service, local orchestration configurations (Docker Compose), Infrastructure as Code (Terraform), and multiple cloud provider application templates.
+
+---
+
+## 2. Features
+
+The application is structured into decoupled modules aligning with the database and package boundaries:
+
+*   **Authentication & Access Control (RBAC)**: Managed user roles (`ADMIN`, `GOVERNMENT_OFFICER`, `PROVIDER`, `BUYER`) using stateless JWT sessions (with access and refresh token rotation) and BCrypt password encryption.
+*   **Property Listing & Asset Management**: Full-featured cataloging of agricultural, commercial, industrial, and residential properties with coordinate tracking (latitude/longitude), address resolution, and pricing structures.
+*   **Property Media**: Display-media integration including standard images, video walkthrough tours, and 360-degree interactive panorama image uploads.
+*   **Verification Documents**: Registry document uploads (Patta, Sale Deeds, Tax Receipts) supporting OCR queues and verification statuses.
+*   **AI Verification Engine**: Asynchronous trust scoring, forgery evaluation, duplicate listing detection, coordinate overlap calculations, and automated AI chat assistance for queries.
+*   **Government Review Workflow**: Inspection audit trails, timeline transitions (`UPLOADED`, `AI_STARTED`, `APPROVED`, `REJECTED`, etc.), and officer remark logs.
+*   **Buyer Interactions**: Property watchlists (saved items) and tour visit scheduling (date/time/status).
+*   **Developer API Integration**: Management of dynamic API keys, request logging (endpoint, status code, latency, IP), and rate limits (hourly/daily window enforcement).
+*   **Analytics Aggregator**: Daily analytics pre-aggregation scheduler summarizing views, searches, verifications, frauds, and API usage statistics for dashboard reporting.
+
+---
+
+## 3. Technology Stack
+
+*   **Core Framework**: Spring Boot 3.4.0 (Java 21)
+*   **Security & Auth**: Spring Security, JWT (JJWT 0.12.5), BCrypt
+*   **Database & ORM**: Hibernate (JPA), MySQL Connector J, HikariCP Connection Pool
+*   **API Documentation**: Springdoc OpenAPI / Swagger UI (v2.8.9)
+*   **Health & Metrics**: Spring Boot Actuator
+*   **Containerization**: Docker, Docker Compose
+*   **CI/CD & IaC**: Terraform, AWS CodeBuild, AWS Systems Manager, Amazon ECR
+*   **Cloud Infrastructure**: AWS ECS Fargate, ALB (Application Load Balancer), Route 53, NAT Gateway, KMS, AWS Secrets Manager
+
+---
+
+## 4. Live Deployment & Endpoints (Mumbai - `ap-south-1`)
+
+The production application is running live in the AWS Mumbai region. Client requests route through an Application Load Balancer (ALB) into container tasks running inside private subnets, egressing through a NAT Gateway for external network calls.
+
+*   **Base URL**: `http://landlens-production-alb-1919392235.ap-south-1.elb.amazonaws.com`
+*   **Health Check (Actuator)**: `http://landlens-production-alb-1919392235.ap-south-1.elb.amazonaws.com/actuator/health`
+*   **Swagger Documentation**: `http://landlens-production-alb-1919392235.ap-south-1.elb.amazonaws.com/swagger-ui/index.html` (Enabled in development, disabled in production for security hardening)
+*   **Production Database (Hostinger)**: `srv1117.hstgr.io:3306` (Schema: `u833088220_LL`, User: `u833088220_LL`)
+*   **NAT Gateway Public Egress IP**: `13.207.227.126` (Whitelisted in Hostinger Remote MySQL settings)
+
+---
+
+## 5. Project Architecture & Request Flows
 
 ### A. Infrastructure & Network Topology
-
-This diagram details the path client requests take from the public internet, routing through the Load Balancer, to the containers running inside private subnets, and finally communicating with your Hostinger database:
+Client requests flow through the public internet, route via the Application Load Balancer to ECS Fargate tasks inside private subnets, and query the Hostinger Remote MySQL Database through a NAT Gateway egress IP:
 
 ```mermaid
 graph TD
@@ -38,7 +73,7 @@ graph TD
             ALB
             NAT[NAT Gateway]
         end
-
+        
         subgraph PrivateSubnets [Private Subnets]
             TG -->|3. Forwards to Port 8080| ECS[ECS Fargate Tasks]
             ECS -->|4. Secure Outbound Traffic| NAT
@@ -50,8 +85,7 @@ graph TD
 ```
 
 ### B. Application Request Processing Lifecycle
-
-This sequence diagram shows how requests (e.g. creating properties or document uploads) are intercepted by Spring Security, processed by the business controllers/services, and saved to the MySQL database:
+Protected paths intercept and validate incoming JWTs. If valid, Spring Security forwards the context to REST Controllers, Services, and JPA Repositories, executing asynchronous tasks when documents require verification:
 
 ```mermaid
 sequenceDiagram
@@ -94,361 +128,296 @@ sequenceDiagram
 
 ---
 
-## 3. Relational Database Design & Schema Specification
+## 6. Folder Structure
 
-The database utilizes a **3NF (Third Normal Form)** relational database schema structured with `UUID` primary keys (`VARCHAR(36)`) and foreign key constraints to maintain strict referential integrity.
+### Root Directory Structure
 
-### Module Overview
+```text
+landlens-backend/
+ ├── .mvn/                     # Maven Wrapper directory
+ ├── deploy-guides/            # Execution blueprints for specific clouds
+ │    ├── azure-deploy.sh      # Deployment guide for Microsoft Azure App Service
+ │    └── hostinger-deploy.sh  # Deployment guide for Hostinger VPS & MySQL setup
+ ├── src/                      # Source code directory
+ │    ├── main/
+ │    │    ├── java/           # Java source files (packaged under com.landlens)
+ │    │    └── resources/      # Application properties, schemas, logs
+ │    └── test/                # Unit & Integration test sources
+ ├── terraform/                # Infrastructure-as-code for AWS deployments
+ ├── .dockerignore             # Docker build ignores
+ ├── .gitattributes            # Git attributes specification
+ ├── .gitignore                # Git exclusions (build targets, logs, credentials)
+ ├── app.yaml                  # DigitalOcean App Platform spec
+ ├── buildspec.yml             # AWS CodeBuild configuration
+ ├── Dockerfile                # Multi-stage production container build
+ ├── Dockerrun.aws.json        # AWS Elastic Beanstalk container runner
+ ├── docker-compose.yml        # Development database and app orchestrator
+ ├── koyeb.yaml                # Koyeb deployment specification
+ ├── railway.json              # Railway deployment config
+ ├── render.yaml               # Render platform service definition
+ ├── service.yaml              # Cloud Run / Kubernetes service definition
+ ├── pom.xml                   # Maven dependencies and plugin builds
+ ├── deploy.ps1                # Windows PowerShell deployment pipeline
+ ├── deploy.sh                 # Unix Bash deployment pipeline
+ ├── verify_api.ps1            # End-to-end integration test runner script
+ └── verify_all_endpoints.ps1  # Advanced automated test pipeline
+```
 
-LandLens is designed around modular boundaries to keep components decoupled, maintainable, and aligned with standard Spring Boot packages:
+### Spring Boot Package Layout
 
-1. **Authentication & Access Control (RBAC)**: Manages users, Role-Based Access Control, security logs, and token sessions.
-2. **Property Listing & Asset Management**: Manages property details, cataloging, spatial attributes, ownership, and structural data.
-3. **Property Media**: Manages public-facing display media (images/videos) associated with properties.
-4. **Verification Documents**: Stores official registry documents (e.g., Sale Deed, Patta, Tax Receipts) uploaded by owners for OCR and verification.
-5. **Verification (AI & Government)**: Captures AI verification trust scores and risk evaluations, manual inspector reviews, and audit timeline transitions.
-6. **Fraud & Disputes**: Tracks AI-flagged duplicate property overlaps and community dispute reports.
-7. **Buyer Interaction**: Facilitates watchlist bookmarking and physical viewing/visit schedules.
-8. **Notifications & Communication**: Handles real-time system alerts and interactive user-to-AI chat history.
-9. **Developer API**: Manages API key hashes, tracks per-key daily usage, logs HTTP request traces, and regulates rate limits.
-10. **Analytics**: Pre-aggregates daily metrics for the admin dashboard.
+The application code follows a package-by-feature structure under `src/main/java/com/landlens/`:
+
+```text
+com.landlens
+ ├── LandlensApplication.java  # Application Entry Point
+ ├── auth                      # Authorization, Security Config, and Users
+ │    ├── controller          # Auth REST Controllers (Register, Login, Refresh)
+ │    ├── dto                 # Request/Response data transfer classes
+ │    ├── model               # Entities: Role, RefreshToken, LoginHistory
+ │    ├── repository          # JPA Repositories
+ │    ├── security            # JWT provider, filters, and WebSecurityConfig
+ │    └── service             # Authorization business logic
+ ├── user                      # User Profile Management
+ │    ├── controller
+ │    ├── model               # Entity: User
+ │    ├── repository
+ │    └── service
+ ├── property                  # Listings, Images, Videos, Saved, & Bookings
+ │    ├── controller          # Property, Image, Video REST controllers
+ │    ├── dto
+ │    ├── mapper              # MapStruct/Manual converters
+ │    ├── model               # Entities: Property, PropertyImage, PropertyVideo, SavedProperty, PropertyVisit
+ │    ├── repository
+ │    └── service
+ ├── document                  # Verification registry document uploads
+ │    ├── controller
+ │    ├── model               # Entity: PropertyDocument
+ │    ├── repository
+ │    └── service
+ ├── verification              # Government Review and Timeline transitions
+ │    ├── controller
+ │    ├── model               # Entities: GovernmentVerification, VerificationTimeline
+ │    ├── repository
+ │    └── service
+ ├── ai                        # AI scoring outputs and chatbot messages
+ │    ├── controller
+ │    ├── model               # Entities: AiVerification, AiConversation, AiMessage
+ │    ├── repository
+ │    └── service
+ ├── fraud                     # Duplicate claim coordinates & community reports
+ │    ├── controller
+ │    ├── model               # Entities: DuplicateClaim, FraudReport
+ │    ├── repository
+ │    └── service
+ ├── notification              # Real-time alerts and user logs
+ │    ├── controller
+ │    ├── model               # Entity: Notification
+ │    ├── repository
+ │    └── service
+ ├── api                       # Developer API key, rate-limiting, and logs
+ │    ├── controller          # Developer & External verification controllers
+ │    ├── dto
+ │    ├── interceptor         # ApiKeyInterceptor (checks headers and rate-limits)
+ │    ├── mapper
+ │    ├── model               # Entities: ApiKey, ApiUsage, ApiLog, ApiRateLimit
+ │    ├── repository
+ │    └── service
+ └── analytics                 # Daily dashboard statistics pre-aggregation
+      ├── controller
+      ├── model               # Entity: DailyAnalytics
+      ├── repository
+      └── service
+```
 
 ---
 
-### Database Entity Relationship Diagram (ERD)
+## 7. Prerequisites
+
+Ensure you have the following installed locally:
+1.  **Java Development Kit (JDK) 21**: Recommended OpenJDK 21 (Temurin).
+2.  **Maven 3.9+**: For building the application (or use `./mvnw` / `mvnw.cmd`).
+3.  **Docker & Docker Compose**: For container execution and database containerization.
+4.  **AWS CLI & Terraform**: Needed only if executing cloud deployment scripts.
+
+---
+
+## 8. Installation Instructions
+
+1.  **Clone the Repository**:
+    ```bash
+    git clone https://github.com/pirates27/backend.git
+    cd backend
+    ```
+
+2.  **Set Up Local Configuration**:
+    Copy files and update environment settings if needed. By default, `application.properties` loads development defaults which boot cleanly with the Docker Compose database.
+
+---
+
+## 9. Environment Variables
+
+The application relies on the following environment variables. If left undefined, local default fallbacks are used:
+
+| Variable Name | Description | Default Fallback (Development) |
+|---|---|---|
+| `DB_URL` | JDBC Connection URL for MySQL | `jdbc:mysql://localhost:3306/landlens?useSSL=false...` |
+| `DB_USERNAME` | Database Authentication User | `root` |
+| `DB_PASSWORD` | Database Authentication Password | `[blank]` |
+| `JWT_SECRET` | HMAC SHA-256 Signature Secret | `9a2f3f4e5d6c7b8a9f0e1d2c3b4a5f6e7d8c9b0a1f2e3d4c5b6a7f8e9d0c1b2a3` |
+| `JWT_EXPIRATION_MS` | JWT Access Token duration (ms) | `86400000` (24 Hours) |
+| `JWT_REFRESH_EXPIRATION_MS` | Refresh Token expiry duration (ms) | `2592000000` (30 Days) |
+| `SPRING_PROFILES_ACTIVE` | Active profile (`prod` or `dev`) | `default` (Runs as development) |
+| `PORT` | Embedded server port | `8080` |
+
+---
+
+## 10. Database Setup
+
+The backend connects to a MySQL relational database. The schema is normalized into **3NF (Third Normal Form)** tables. 
+
+1.  **Initialization Script**:
+    The database structure is detailed in [schema.sql](file:///c:/Users/vasav/OneDrive/Desktop/Land_Lens/back_end/src/main/resources/schema.sql). The application executes this automatically in production or when starting the containerized setup.
+2.  **Common Audit Fields**:
+    Every main table has audit attributes to maintain full integrity:
+    *   `id` (`VARCHAR(36)`, UUID string representation)
+    *   `created_at` (`TIMESTAMP`, Default `CURRENT_TIMESTAMP`)
+    *   `updated_at` (`TIMESTAMP`, Default `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`)
+    *   `is_active` (`TINYINT(1)`, soft-delete indicator)
+3.  **Hibernate Settings**:
+    *   **Development**: `spring.jpa.hibernate.ddl-auto=update` is active to dynamically synchronize models.
+    *   **Production**: `spring.jpa.hibernate.ddl-auto=none` is enforced for structural safety.
+
+---
+
+## 11. Running Locally
+
+You can launch the project on your local machine:
+
+```powershell
+# Using the Maven wrapper
+.\mvnw.cmd spring-boot:run
+```
+
+The server will start listening at `http://localhost:8080`.
+
+---
+
+## 12. Running with Docker (Local Development)
+
+The easiest way to boot the database and the backend app in an isolated network is using Docker Compose:
+
+1.  **Start Services**:
+    ```bash
+    docker-compose up --build -d
+    ```
+    This launches a MySQL database container initialized with the schema, followed by the Spring Boot container.
+
+2.  **Stop Services**:
+    ```bash
+    docker-compose down -v
+    ```
+
+---
+
+## 13. API Documentation (Swagger/OpenAPI)
+
+The application publishes API specifications dynamically:
+
+*   **Swagger UI Page**: `http://localhost:8080/swagger-ui/index.html` (Accessible in local/dev profiles)
+*   **OpenAPI Specs Document**: `http://localhost:8080/v3/api-docs`
+
+---
+
+## 14. Deployment Options
+
+LandLens is built cloud-agnostically and supports various deployment workflows:
+
+### A. Docker Deployments (Cloud Templates)
+
+1.  **Koyeb (`koyeb.yaml`)**:
+    Deploys container tasks pulling secrets from `secret.DB_URL`, `secret.DB_USERNAME`, etc. It sets health checks to `/actuator/health` on port `8080`.
+2.  **Render (`render.yaml`)**:
+    Uses Render Blueprint configurations to deploy a starter service building from the `Dockerfile`.
+3.  **Railway (`railway.json`)**:
+    Deploys multi-replica containers with an `ON_FAILURE` restart policy.
+4.  **DigitalOcean App Platform / App Engine (`app.yaml`)**:
+    Deploys the service in two-instance configurations with initial delay checks.
+
+### B. AWS ECS Fargate + ALB Infrastructure (Production Blueprint)
+
+The production configuration runs a hybrid Terraform + CodeBuild pipeline that packages and rolls out updates from your command line:
+
+```mermaid
+graph TD
+    A[Workstation / Source Code] -->|tar.exe Zips Source| B(source.zip)
+    B -->|aws s3 cp| C[S3 Source Bucket]
+    C -->|Triggers| D[AWS CodeBuild]
+    D -->|1. Maven Compile Java 21| E[landlens.jar]
+    E -->|2. Docker build| F[Docker Image]
+    F -->|3. Docker push| G[AWS ECR Repository]
+    G -->|Triggers Redeploy| H[AWS ECS Fargate Cluster]
+    H -->|Drains Old Tasks| I[ECS Tasks in Private Subnet]
+    J[Application Load Balancer] -->|Health Check / Routing| I
+```
+
+#### Executing AWS Deployment
+Run the automated build & release script from the root directory:
+
+**Windows PowerShell**:
+```powershell
+.\deploy.ps1
+```
+
+**Linux / Bash**:
+```bash
+./deploy.sh
+```
+
+The script manages structural initialization via Terraform, bundles your workspace (omitting caches), pushes it to AWS S3, triggers CodeBuild for Compilation/ECR pushing, and enforces zero-downtime rolling updates on ECS Fargate tasks.
+
+---
+
+## 15. Build Instructions
+
+To compile and package the application into an executable `.jar` file without executing integration tests:
+
+```powershell
+.\mvnw.cmd clean package -DskipTests
+```
+The output file `landlens-0.0.1-SNAPSHOT.jar` will be generated inside the `target/` directory.
+
+---
+
+## 16. Testing Instructions
+
+To run the JUnit test suite:
+
+```powershell
+.\mvnw.cmd test
+```
+
+> [!IMPORTANT]  
+> **Database Requirement for Tests:**  
+> The `LandlensApplicationTests` class boots the Spring Application Context. Because the project does not include an in-memory SQL database (such as H2), it queries the configured MySQL instance on `localhost:3306`. If a MySQL service is not running or accessible, the integration test will fail with a `java.sql.SQLException: Access denied` or `Connection Refused` error.
+> 
+> To test successfully, run `docker-compose up mysql` in a separate terminal before executing `.\mvnw.cmd test`. Alternatively, skip the test phase using `-DskipTests` during build steps.
+
+---
+
+## 17. Security Features
+
+*   **Credential Encryption**: Secure hashing using BCrypt for all password fields inside the `users` table.
+*   **Token Authorization**: Custom `JwtAuthenticationFilter` intercepts HTTP headers to validate bearer signatures.
+*   **Security Policy**: Stateless session management, explicitly allowing anonymous GET requests to public property listings and actuator endpoints, while forcing credential validation for mutations.
+*   **External API Guarding**: Interceptor (`ApiKeyInterceptor`) locks all `/api/v1/external/**` routes. Calls require a valid `x-api-key` header.
+*   **Rate Limits**: Automated tracker logs developer usage and blocks keys exceeding defined thresholds (429 Rate Limit Exceeded).
+
+---
+
+## 18. Database Schema Overview (Entity Relationship Diagram)
 
 ```mermaid
 erDiagram
-    roles {
-        UUID id PK
-        VARCHAR name UK
-        VARCHAR description
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    users {
-        UUID id PK
-        VARCHAR email UK
-        VARCHAR password_hash
-        VARCHAR first_name
-        VARCHAR last_name
-        VARCHAR phone_number
-        UUID role_id FK
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    refresh_tokens {
-        UUID id PK
-        UUID user_id FK
-        VARCHAR token UK
-        TIMESTAMP expiry_date
-        BOOLEAN revoked
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    login_histories {
-        UUID id PK
-        UUID user_id FK
-        TIMESTAMP login_timestamp
-        VARCHAR ip_address
-        VARCHAR user_agent
-        VARCHAR status
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    properties {
-        UUID id PK
-        VARCHAR property_code UK
-        VARCHAR title
-        VARCHAR category
-        NUMERIC area
-        NUMERIC price
-        TEXT description
-        VARCHAR survey_number
-        VARCHAR address
-        NUMERIC latitude
-        NUMERIC longitude
-        VARCHAR district
-        VARCHAR village
-        VARCHAR state
-        VARCHAR pincode
-        VARCHAR three_sixty_image_url
-        VARCHAR status
-        UUID provider_id FK
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    property_images {
-        UUID id PK
-        UUID property_id FK
-        VARCHAR image_url
-        VARCHAR thumbnail_url
-        INTEGER display_order
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    property_videos {
-        UUID id PK
-        UUID property_id FK
-        VARCHAR video_url
-        INTEGER duration
-        VARCHAR thumbnail_url
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    property_documents {
-        UUID id PK
-        UUID property_id FK
-        VARCHAR document_type
-        VARCHAR file_url
-        VARCHAR ocr_status
-        VARCHAR verification_status
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    ai_verifications {
-        UUID id PK
-        UUID property_id FK "Unique"
-        NUMERIC ai_trust_score
-        NUMERIC forgery_score
-        NUMERIC duplicate_score
-        BOOLEAN ownership_match
-        NUMERIC risk_score
-        TEXT summary
-        NUMERIC confidence
-        TIMESTAMP generated_date
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    government_verifications {
-        UUID id PK
-        UUID property_id FK "Unique"
-        UUID officer_id FK
-        TEXT remarks
-        VARCHAR status
-        TIMESTAMP verified_date
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    verification_timelines {
-        UUID id PK
-        UUID property_id FK
-        TIMESTAMP timestamp
-        VARCHAR action
-        TEXT remarks
-        UUID user_id FK
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    duplicate_claims {
-        UUID id PK
-        UUID property_a_id FK
-        UUID property_b_id FK
-        NUMERIC similarity
-        TEXT reason
-        VARCHAR status
-        VARCHAR decision
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    fraud_reports {
-        UUID id PK
-        UUID reporter_id FK
-        UUID property_id FK
-        VARCHAR reason
-        TEXT description
-        VARCHAR status
-        UUID officer_id FK
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    property_visits {
-        UUID id PK
-        UUID buyer_id FK
-        UUID property_id FK
-        DATE visit_date
-        TIME visit_time
-        VARCHAR status
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    saved_properties {
-        UUID id PK
-        UUID buyer_id FK
-        UUID property_id FK
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    notifications {
-        UUID id PK
-        VARCHAR title
-        TEXT message
-        VARCHAR type
-        BOOLEAN is_read
-        UUID receiver_id FK
-        TIMESTAMP created_time
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    ai_conversations {
-        UUID id PK
-        UUID user_id FK
-        VARCHAR title
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    ai_messages {
-        UUID id PK
-        UUID conversation_id FK
-        VARCHAR sender_role
-        TEXT content
-        TIMESTAMP timestamp
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    api_keys {
-        UUID id PK
-        UUID user_id FK
-        VARCHAR key_hash UK
-        VARCHAR name
-        VARCHAR prefix
-        VARCHAR status
-        TIMESTAMP expiry_date
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    api_usages {
-        UUID id PK
-        UUID api_key_id FK
-        DATE usage_date
-        INTEGER call_count
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    api_logs {
-        UUID id PK
-        UUID api_key_id FK
-        VARCHAR endpoint
-        VARCHAR method
-        INTEGER status_code
-        VARCHAR ip_address
-        TIMESTAMP request_timestamp
-        INTEGER response_time_ms
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    api_rate_limits {
-        UUID id PK
-        UUID api_key_id FK "Unique"
-        VARCHAR limit_type
-        INTEGER max_requests
-        TIMESTAMP current_window_start
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
-    daily_analytics {
-        UUID id PK
-        DATE analytics_date UK
-        INTEGER property_views
-        INTEGER search_count
-        INTEGER verification_count
-        INTEGER fraud_count
-        INTEGER api_calls
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
-        UUID created_by
-        UUID updated_by
-        BOOLEAN is_active
-    }
-
     roles ||--o{ users : "assigns"
     users ||--o{ refresh_tokens : "generates"
     users ||--o{ login_histories : "attempts"
@@ -483,357 +452,51 @@ erDiagram
 
 ---
 
-### Data Schema Table Details
+## 19. Production Credentials & Encryption Reference
 
-#### Common Audit Fields (Present in EVERY Table)
-* `id` (`VARCHAR(36)`, Primary Key, UUID string representation)
-* `created_at` (`TIMESTAMP`, Not Null, Default `CURRENT_TIMESTAMP`)
-* `updated_at` (`TIMESTAMP`, Not Null, Default `CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`)
-* `created_by` (`VARCHAR(36)`, Nullable, referencing `users(id)`)
-* `updated_by` (`VARCHAR(36)`, Nullable, referencing `users(id)`)
-* `is_active` (`TINYINT(1)`, Not Null, Default `1` for soft-delete)
+Production credentials are encrypted using AWS KMS and managed securely in **AWS Secrets Manager**. They are injected dynamically at container launch into Fargate tasks:
 
-#### Primary Modules Tables
-* **`roles`**: Stores the authorization role mapping (`ADMIN`, `GOVERNMENT_OFFICER`, `PROVIDER`, `BUYER`).
-* **`users`**: Contains credential hashes (BCrypt) and role associations.
-* **`refresh_tokens`**: Tracks JWT session rollover tokens.
-* **`login_histories`**: Audit logs tracking client IPs and session statuses.
-* **`properties`**: The central entity representing real estate plots. Includes coordinates, addresses, and validation state.
-* **`property_images` & `property_videos`**: Attachments showcasing the property listing.
-* **`property_documents`**: Official land titles (Patta, Deeds) uploaded for verification.
-* **`ai_verifications`**: Computed scores for trust, risk, forgery, and duplicate claims.
-* **`government_verifications`**: Remarks and decisions (Approve/Reject) of the verifying officer.
-* **`verification_timelines`**: Audit timelines tracking every transition of property verification status.
-* **`duplicate_claims`**: AI flagged coordinates or details overlap between listings.
-* **`fraud_reports`**: Community complaints flagged on listings.
-* **`property_visits`**: Scheduled viewing dates/times between buyers and providers.
-* **`saved_properties`**: Watchlist bookmarks linking buyers to properties.
-* **`notifications`**: System-generated user alerts.
-* **`ai_conversations` & `ai_messages`**: Chat history with the AI verification assistant.
-* **`api_keys`, `api_usages`, `api_logs`, `api_rate_limits`**: Complete suite tracking developer access and request metrics.
-* **`daily_analytics`**: Analytics aggregates for dashboard metrics.
+1.  **AWS Deployer IAM User**:
+    *   **Access Key ID**: `AKIATXTJV...[MASKED_FOR_SECURITY]...GAWJ`
+    *   **Secret Access Key**: `taHtZX0a2mVz7SHuGG...[MASKED_FOR_SECURITY]...M8o`
+2.  **Production MySQL Database (Hostinger)**:
+    *   **Host**: `srv1117.hstgr.io`
+    *   **Port**: `3306`
+    *   **Database Name**: `u833088220_LL`
+    *   **Username**: `u833088220_LL`
+    *   **Password**: `833088220...[MASKED_FOR_SECURITY]...Ll1`
+    *   **JDBC URL**: `jdbc:mysql://srv1117.hstgr.io:3306/u833088220_LL?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&useInformationSchema=true`
+3.  **Secrets Management Commands**:
+    *   Retrieve secrets:
+        ```powershell
+        aws secretsmanager get-secret-value --secret-id landlens-production-db-credentials --region ap-south-1
+        ```
+    *   Encrypt / Update secrets:
+        Save to file then upload:
+        ```powershell
+        aws secretsmanager put-secret-value --secret-id landlens-production-db-credentials --secret-string file://temp_secret.json --region ap-south-1
+        ```
 
 ---
 
-## 3. DevOps Deployment Architecture & CI/CD Pipeline
+## 20. Future Improvements
 
-The project utilizes a hybrid Terraform + CodeBuild pipeline that automates deployment steps directly from your workstation to ECS Fargate:
-
-```mermaid
-graph TD
-    A[Workstation / Source Code] -->|tar.exe Zips Source| B(source.zip)
-    B -->|aws s3 cp| C[S3 Source Bucket]
-    C -->|Triggers| D[AWS CodeBuild]
-    D -->|1. Maven Compile Java 21| E[landlens.jar]
-    E -->|2. Docker build| F[Docker Image]
-    F -->|3. Docker push| G[AWS ECR Repository]
-    G -->|Triggers Redeploy| H[AWS ECS Fargate Cluster]
-    H -->|Drains Old Tasks| I[ECS Tasks in Private Subnet]
-    J[Application Load Balancer] -->|Health Check / Routing| I
-```
-
-### Deployment Commands
-To run the automated deployment pipeline, execute the scripts from the root directory:
-
-**Windows PowerShell**:
-```powershell
-.\deploy.ps1
-```
-
-**Linux / Bash**:
-```bash
-./deploy.sh
-```
-
-### What the Scripts Automate:
-1. **Checks Dependencies**: Ensures `aws`, `terraform`, and `tar` are installed.
-2. **First-Pass Infrastructure**: Initializes and applies Terraform configs to spin up the ECR Repository, S3 bucket, and CodeBuild.
-3. **Code Bundling**: Packages and zips the local workspace directory (excluding heavy binaries like `.terraform`, `terraform.exe`, and `target` to keep the size under `300KB`).
-4. **Triggers CodeBuild**: Uploads the bundle to S3 and calls CodeBuild. CodeBuild starts a secure environment, compiles the application using Maven, builds the Docker container, and pushes the tagged image to the ECR repo.
-5. **Second-Pass Infrastructure**: Configures the ALB, target groups, ECS Fargate Service, auto-scaling, and CloudWatch metrics.
-6. **Rolling Update**: Forces a redeployment on ECS Fargate. Fargate spins up the new task replicas, waits for the health check to report status `200/UP`, routes traffic to them, and shuts down old tasks (Zero-Downtime deployment).
-7. **Verifies Health**: Polls `/actuator/health` to confirm the environment is healthy.
+*   **Test Isolation with H2**: Integrate a mock H2 in-memory profile (`application-test.properties`) so unit and integration tests run successfully during build processes without needing an active MySQL instance.
+*   **Redis Caching Layer**: Add a Redis cache wrapper for public property search endpoints to decrease queries to remote database instances.
+*   **Asynchronous Message Queue**: Transition AI processing and OCR triggers from inline threads to a RabbitMQ/Kafka queue to scale verification worker nodes separately.
+*   **Geospatial Indexes**: Convert simple latitude/longitude coordinate floats into spatial datatypes using `Hibernate Spatial` + `MySQL Spatial` to support polygon searches.
 
 ---
 
-## 4. Suggested Spring Boot Package Structure
+## 21. Contributing Guidelines
 
-To maintain clean modular boundaries corresponding to our database modules, use the following package layout:
-
-```text
-com.landlens
- ├── auth
- │    ├── controller
- │    ├── service
- │    ├── model (Role, RefreshToken, LoginHistory)
- │    ├── repository
- │    └── security (JWT filters, WebSecurityConfig)
- ├── user
- │    ├── controller
- │    ├── service
- │    ├── model (User)
- │    └── repository
- ├── property
- │    ├── controller
- │    ├── service
- │    ├── model (Property, PropertyImage, PropertyVideo, SavedProperty, PropertyVisit)
- │    └── repository
- ├── document
- │    ├── controller
- │    ├── service
- │    ├── model (PropertyDocument)
- │    └── repository
- ├── verification
- │    ├── controller
- │    ├── service
- │    ├── model (GovernmentVerification, VerificationTimeline)
- │    └── repository
- ├── ai
- │    ├── controller
- │    ├── service (AI analysis and chat connection)
- │    ├── model (AiVerification, AiConversation, AiMessage)
- │    └── repository
- ├── api
- │    ├── controller
- │    ├── service (Rate limiting and developer usage tracking)
- │    ├── model (ApiKey, ApiUsage, ApiLog, ApiRateLimit)
- │    ├── repository
- │    └── interceptor (Rate limit / API key validation)
- └── analytics
-      ├── controller
-      ├── service (Daily aggregates scheduler)
-      ├── model (DailyAnalytics)
-      └── repository
-```
+1.  Create a feature branch from `main` (`git checkout -b feature/amazing-feature`).
+2.  Commit your changes using meaningful, structured commit messages.
+3.  Run unit tests with a local database enabled and verify target builds clean.
+4.  Submit a Pull Request targeting the `main` branch.
 
 ---
 
-## 5. API Endpoints Reference
+## 22. License
 
-### Authentication
-* `POST /api/auth/register` - Create user account
-* `POST /api/auth/login` - Obtain Access + Refresh tokens
-* `POST /api/auth/refresh` - Rotate access tokens
-* `POST /api/auth/logout` - Revoke tokens
-
-### Properties
-* `POST /api/properties` - List a property
-* `GET /api/properties` - List all properties (supports district, category, and price filtering)
-* `GET /api/properties/{id}` - Retrieve property details
-* `PUT /api/properties/{id}` - Modify listing
-* `DELETE /api/properties/{id}` - Remove property
-* `POST /api/properties/{id}/images` - Upload images
-* `POST /api/properties/{id}/videos` - Add video tours
-
-### OCR & AI Engine Verification
-* `POST /api/properties/{id}/documents` - Upload ownership documents (e.g. `PATTA`, `SALE_DEED`)
-* `POST /api/documents/{docId}/ocr` - Trigger OCR transcription and validation
-* `POST /api/properties/{id}/ai-verify` - Trigger AI Trust analysis (Trust score, risk, and duplicates)
-
-### Reviews & Timeline
-* `POST /api/properties/{id}/government-verify` - Approve/Reject listing (Govt Officer only)
-* `GET /api/properties/{id}/timeline` - Get audit trail history
-
-### Buyer Interactions
-* `POST /api/properties/{id}/save` - Bookmark property
-* `POST /api/properties/{id}/visit` - Book physical visit tour
-
-### Developers & Admin
-* `POST /api/developer/keys` - Create dynamic API keys
-* `GET /api/v1/external/properties/{code}/verify` - Fetch verification detail using API keys
-* `GET /api/analytics/dashboard` - Admin analytics metrics
-
----
-
-## 6. API Sample Payloads (Request & Response)
-
-### 1. User Registration (`POST /api/auth/register`)
-**Request Body**:
-```json
-{
-  "email": "provider_2026@landlens.com",
-  "password": "Password123",
-  "firstName": "Builder",
-  "lastName": "Prasad",
-  "phoneNumber": "9876543210",
-  "role": "PROVIDER"
-}
-```
-**Response Body**:
-```json
-"User registered successfully with ID: 1bc76d8e-e5ca-4a6d-8c5f-2043cb36f59e"
-```
-
-### 2. User Login (`POST /api/auth/login`)
-**Request Body**:
-```json
-{
-  "email": "provider_2026@landlens.com",
-  "password": "Password123"
-}
-```
-**Response Body**:
-```json
-{
-  "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJwcm92aWRlcl8yMDI2QGxhbmRsZW5zLmNvbSIsImlhdCI6MTc4NDEyMTMxMCwiZXhwIjoxNzg0MjA3NzEwfQ...",
-  "refreshToken": "7c8e-e5ca-4a6d-8c5f-2043cb36f59e",
-  "role": "PROVIDER",
-  "email": "provider_2026@landlens.com"
-}
-```
-
-### 3. Create Property Listing (`POST /api/properties`)
-**Request Body**:
-```json
-{
-  "title": "Premium Agricultural Plot in Guntur",
-  "category": "AGRICULTURAL",
-  "area": 2.5,
-  "price": 4500000.0,
-  "description": "High yield fertile soil near Guntur bypass road. Accessible road connection and clean title.",
-  "surveyNumber": "45-A/12",
-  "address": "Bypass road, Guntur Rural",
-  "latitude": 16.3067,
-  "longitude": 80.4365,
-  "district": "Guntur",
-  "village": "Gorantla",
-  "state": "Andhra Pradesh",
-  "pincode": "522034"
-}
-```
-**Response Body**:
-```json
-{
-  "id": "0aba9515-6f75-45fc-8358-cdd35cc64495",
-  "propertyCode": "LL-1784121310459-119",
-  "title": "Premium Agricultural Plot in Guntur",
-  "category": "AGRICULTURAL",
-  "area": 2.50,
-  "price": 4500000.00,
-  "status": "PENDING_AI",
-  "surveyNumber": "45-A/12"
-}
-```
-
-### 4. OCR Execution (`POST /api/documents/{docId}/ocr`)
-**Response Body**:
-```json
-{
-  "documentId": "6f3626a3-96b7-49cf-81dd-9af8e6685ecb",
-  "ocrStatus": "COMPLETED",
-  "verificationStatus": "VERIFIED",
-  "rawText": "GOVERNMENT OF ANDHRA PRADESH - PATTA PASSBOOK... OWNER: BUILDER PRASAD... SURVEY NO: 45-A/12..."
-}
-```
-
-### 5. AI Verification Checks (`POST /api/properties/{id}/ai-verify`)
-**Response Body**:
-```json
-{
-  "id": "8c5f-2043cb36f59e",
-  "aiTrustScore": 88.50,
-  "forgeryScore": 5.20,
-  "duplicateScore": 0.00,
-  "ownershipMatch": true,
-  "riskScore": 12.00,
-  "confidence": 95.00,
-  "summary": "LandLens AI Trust engine analysis complete. High confidence ownership match. Bounds clear."
-}
-```
-
-### 6. Government Inspector Review (`POST /api/properties/{id}/government-verify`)
-**Request Body**:
-```json
-{
-  "status": "APPROVED",
-  "remarks": "Verified bounds on local land records maps. Matches village survey records. Approved."
-}
-```
-**Response Body**:
-```json
-{
-  "id": "5961bbf7-0dd9-40b6-86d5-088144a1a078",
-  "status": "APPROVED",
-  "remarks": "Verified bounds on local land records maps. Matches village survey records. Approved.",
-  "verifiedDate": "2026-07-15T13:15:11.742383Z"
-}
-```
-
----
-
-## 7. Production Credentials & Encryption Operations Reference
-
-To ensure strict data security and compliance with AWS architecture patterns, production credentials are **never hardcoded** in cleartext configuration files. Instead, they are stored securely in **AWS Secrets Manager**, encrypted with KMS, and injected dynamically into Fargate container memory at runtime.
-
-### A. Active Environment Plaintext Credentials
-
-For administrator maintenance and manual testing, the active production database, token secrets, and AWS deployment keys are listed below:
-
-1. **AWS Deployer IAM User**:
-   * **Access Key ID**: `AKIATXTJV...[MASKED_FOR_SECURITY]...GAWJ`
-   * **Secret Access Key**: `taHtZX0a2mVz7SHuGG...[MASKED_FOR_SECURITY]...M8o`
-   * **Scope**: full administrator access to ECR, ECS Fargate, CodeBuild, S3, Secrets Manager, and VPC resources in `ap-south-1`.
-
-2. **Production MySQL Database (Hostinger)**:
-   * **Host**: `srv1117.hstgr.io`
-   * **Port**: `3306`
-   * **Database Name**: `u833088220_LL`
-   * **Username**: `u833088220_LL`
-   * **Password**: `833088220...[MASKED_FOR_SECURITY]...Ll1`
-   * **JDBC URL**: `jdbc:mysql://srv1117.hstgr.io:3306/u833088220_LL?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&useInformationSchema=true`
-
-3. **JWT Encryption Secret**:
-   * **HMAC SHA-256 Secret**: `9a2f3f4e5d6c...[MASKED_FOR_SECURITY]...b2a3`
-
----
-
-### B. Secrets Encryption & Deployment Operations Flowchart
-
-Below is a graphical representation illustrating how these secrets are encrypted at the AWS account layer and decrypted by the ECS task execution agent:
-
-```mermaid
-graph TD
-    Admin[Administrator] -->|1. Encrypted Credentials Payload| ASM[AWS Secrets Manager]
-    ASM -->|2. Stores using Default KMS Key| KMS[AWS KMS Service]
-    
-    subgraph ECS_Agent [ECS Fargate Container Boot]
-        Agent[ECS Fargate Agent] -->|3. GetSecretValue API call| ASM
-        ASM -->|4. Requests Decrypt| KMS
-        KMS -->|5. Returns Plaintext String| ASM
-        ASM -->|6. Injects into Container Environment| Env[Fargate Task Environment Memory]
-    end
-
-    Env -->|7. Spring Datasource URL / Credentials| Spring[Spring Boot Application Context]
-```
-
----
-
-### C. Commands for Reading & Writing Secrets (Decryption / Encryption)
-
-Use the following CLI commands to read (decrypt) and modify (encrypt) values in Secrets Manager:
-
-#### 1. Retrieve & Decrypt database credentials:
-```powershell
-aws secretsmanager get-secret-value --secret-id landlens-production-db-credentials --region ap-south-1
-```
-
-#### 2. Update & Encrypt new database credentials:
-*Note: To avoid quote-stripping issues in PowerShell, save the JSON payload to a temporary file before writing:*
-```powershell
-# Save JSON string
-$json = '{"db_url":"jdbc:mysql://srv1117.hstgr.io:3306/u833088220_LL?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&useInformationSchema=true","db_username":"YOUR_DB_USERNAME","db_password":"YOUR_DB_PASSWORD"}'
-
-# Write plain UTF-8 (BOM-free) to a temp file
-[System.IO.File]::WriteAllText("temp_secret.json", $json)
-
-# Upload and encrypt in Secrets Manager
-aws secretsmanager put-secret-value --secret-id landlens-production-db-credentials --secret-string file://temp_secret.json --region ap-south-1
-
-# Clean up local file
-Remove-Item temp_secret.json
-```
-
-#### 3. Retrieve & Decrypt JWT secret:
-```powershell
-aws secretsmanager get-secret-value --secret-id landlens-production-jwt-secret --region ap-south-1
-```
+This project is released under the standard licensing terms of LandLens. Please consult [LICENSE.txt](file:///c:/Users/vasav/OneDrive/Desktop/Land_Lens/back_end/LICENSE.txt) for more info.
