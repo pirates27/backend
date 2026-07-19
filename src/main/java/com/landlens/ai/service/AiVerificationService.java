@@ -23,6 +23,14 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 
 @Service
 public class AiVerificationService {
@@ -69,75 +77,98 @@ public class AiVerificationService {
         List<DuplicateClaim> claims = duplicateClaimRepository.findByPropertyAIdOrPropertyBId(propertyId, propertyId);
         List<FraudReport> frauds = fraudReportRepository.findByPropertyId(propertyId);
 
-        // Deterministic pseudo-random variation based on property UUID
-        // This ensures the AI score doesn't look identical for two completely empty properties
-        int seed = Math.abs(propertyId.hashCode());
-        double variation = (seed % 10) - 5; // -5 to +4
-
-        // 1. Forgery Score
+        // Call NVIDIA LLM for verification
+        double trust = 0.0;
         double forgery = 0.0;
-        boolean ownershipMatch = false;
-        if (docs == null || docs.isEmpty()) {
-            forgery = 45.0 + Math.abs(variation); // Base high forgery risk if no documents exist
-        } else {
-            forgery = 2.0; // Base low score
-            for (PropertyDocument doc : docs) {
-                if ("FAILED".equals(doc.getOcrStatus())) forgery += 20.0;
-                if ("REJECTED".equals(doc.getVerificationStatus())) forgery += 30.0;
-                if (("SALE_DEED".equals(doc.getDocumentType()) || "PATTA".equals(doc.getDocumentType())) &&
-                    !"FAILED".equals(doc.getOcrStatus()) && !"REJECTED".equals(doc.getVerificationStatus())) {
-                    ownershipMatch = true;
-                }
-            }
-        }
-        
-        // Metadata penalties for forgery
-        if (property.getDescription() == null || property.getDescription().length() < 20) {
-            forgery += 5.0; // Poor description increases forgery risk
-        }
-        
-        forgery = Math.min(forgery, 100.0);
-
-        // 2. Duplicate Score
         double duplicate = 0.0;
-        if (claims != null && !claims.isEmpty()) {
-            for (DuplicateClaim claim : claims) {
-                if (claim.getSimilarity() != null && claim.getSimilarity().doubleValue() > duplicate) {
-                    duplicate = claim.getSimilarity().doubleValue();
-                }
-            }
-        } else {
-            duplicate = Math.max(0.0, variation * 0.5); // Add a tiny bit of random variance (0-2%) for realism
-        }
-
-        // 3. Risk Score
         double risk = 0.0;
-        if (frauds != null) {
-            for (FraudReport fraud : frauds) {
-                if ("SUBMITTED".equals(fraud.getStatus()) || "UNDER_INVESTIGATION".equals(fraud.getStatus())) {
-                    risk += 25.0;
+        boolean ownershipMatch = false;
+        double confidence = 0.0;
+        String summary = "";
+
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            
+            // Construct context string
+            StringBuilder context = new StringBuilder();
+            context.append("Property Title: ").append(property.getTitle()).append("\n");
+            context.append("Property Desc: ").append(property.getDescription()).append("\n");
+            context.append("Survey No: ").append(property.getSurveyNumber()).append("\n");
+            context.append("Has 360 Image: ").append(property.getThreeSixtyImageUrl() != null).append("\n");
+            
+            context.append("Documents:\n");
+            if (docs == null || docs.isEmpty()) {
+                context.append("NONE\n");
+            } else {
+                for (PropertyDocument doc : docs) {
+                    context.append("- ").append(doc.getDocumentType()).append(" (OCR: ").append(doc.getOcrStatus()).append(", VERIFY: ").append(doc.getVerificationStatus()).append(")\n");
                 }
             }
-        }
-        
-        // Metadata penalties for risk
-        if (property.getThreeSixtyImageUrl() == null || property.getThreeSixtyImageUrl().isEmpty()) {
-            risk += 12.0; // Missing 360 view increases risk
-        }
-        if (property.getSurveyNumber() == null || property.getSurveyNumber().length() < 3) {
-            risk += 8.0; // Suspiciously short survey number increases risk
-        }
-        
-        risk = Math.min(risk, 100.0);
+            
+            context.append("Fraud Reports: ").append(frauds != null ? frauds.size() : 0).append("\n");
+            context.append("Duplicate Claims: ").append(claims != null ? claims.size() : 0).append("\n");
 
-        // 4. Overall Trust Score
-        double trust = 100.0 - (forgery * 0.4 + duplicate * 0.4 + risk * 0.2);
-        trust = Math.max(trust, 0.0);
+            // Build request JSON
+            ObjectNode rootNode = mapper.createObjectNode();
+            rootNode.put("model", "openai/gpt-oss-120b");
+            rootNode.put("temperature", 1);
+            rootNode.put("top_p", 1);
+            rootNode.put("max_tokens", 1024);
+            rootNode.put("stream", false);
+            
+            ArrayNode messagesArray = rootNode.putArray("messages");
+            ObjectNode messageNode = mapper.createObjectNode();
+            messageNode.put("role", "user");
+            messageNode.put("content", "You are an expert real estate auditor. Analyze the following property data and return your evaluation strictly as a JSON object with NO OTHER TEXT or markdown. Keys must be: 'aiTrustScore' (0-100 float), 'forgeryScore' (0-100 float), 'duplicateScore' (0-100 float), 'riskScore' (0-100 float), 'ownershipMatch' (boolean), 'confidence' (0-100 float), 'summary' (string). Data:\n" + context.toString());
+            messagesArray.add(messageNode);
 
-        String summary = "LandLens AI Trust engine analysis complete. ";
-        if (trust > 80) summary += "High confidence. Bounds clear.";
-        else if (trust > 50) summary += "Medium confidence. Some flags detected.";
-        else summary += "Low confidence. Significant risks detected.";
+            String requestBody = mapper.writeValueAsString(rootNode);
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://integrate.api.nvidia.com/v1/chat/completions"))
+                    .header("Authorization", "Bearer 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")
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                    .build();
+
+            HttpClient client = HttpClient.newHttpClient();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) {
+                JsonNode responseNode = mapper.readTree(response.body());
+                String content = responseNode.path("choices").get(0).path("message").path("content").asText();
+                
+                // Clean up possible markdown code blocks
+                if (content.startsWith("```json")) {
+                    content = content.substring(7);
+                    if (content.endsWith("```")) content = content.substring(0, content.length() - 3);
+                } else if (content.startsWith("```")) {
+                    content = content.substring(3);
+                    if (content.endsWith("```")) content = content.substring(0, content.length() - 3);
+                }
+                
+                JsonNode llmResult = mapper.readTree(content.trim());
+                trust = llmResult.path("aiTrustScore").asDouble(50.0);
+                forgery = llmResult.path("forgeryScore").asDouble(50.0);
+                duplicate = llmResult.path("duplicateScore").asDouble(0.0);
+                risk = llmResult.path("riskScore").asDouble(0.0);
+                ownershipMatch = llmResult.path("ownershipMatch").asBoolean(false);
+                confidence = llmResult.path("confidence").asDouble(50.0);
+                summary = llmResult.path("summary").asText("LLM verification complete.");
+            } else {
+                throw new RuntimeException("API Call failed with status: " + response.statusCode());
+            }
+
+        } catch (Exception e) {
+            // Fallback to basic heuristics if API fails
+            forgery = (docs == null || docs.isEmpty()) ? 50.0 : 5.0;
+            duplicate = (claims == null || claims.isEmpty()) ? 0.0 : 15.0;
+            risk = (frauds == null || frauds.isEmpty()) ? 0.0 : 25.0;
+            trust = Math.max(100.0 - (forgery * 0.4 + duplicate * 0.4 + risk * 0.2), 0.0);
+            ownershipMatch = (docs != null && !docs.isEmpty());
+            confidence = 40.0;
+            summary = "Fallback verification used due to AI service timeout. " + e.getMessage();
+        }
 
         AiVerification report = new AiVerification();
         report.setProperty(property);
