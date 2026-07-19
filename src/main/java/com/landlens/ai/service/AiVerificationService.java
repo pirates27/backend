@@ -9,6 +9,12 @@ import com.landlens.user.repository.UserRepository;
 import com.landlens.verification.model.VerificationTimeline;
 import com.landlens.verification.repository.VerificationTimelineRepository;
 import com.landlens.notification.service.NotificationService;
+import com.landlens.document.repository.PropertyDocumentRepository;
+import com.landlens.document.model.PropertyDocument;
+import com.landlens.fraud.repository.DuplicateClaimRepository;
+import com.landlens.fraud.model.DuplicateClaim;
+import com.landlens.fraud.repository.FraudReportRepository;
+import com.landlens.fraud.model.FraudReport;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +42,15 @@ public class AiVerificationService {
     @Autowired
     private NotificationService notificationService;
 
+    @Autowired
+    private PropertyDocumentRepository documentRepository;
+
+    @Autowired
+    private DuplicateClaimRepository duplicateClaimRepository;
+
+    @Autowired
+    private FraudReportRepository fraudReportRepository;
+
     @Transactional
     public AiVerification triggerAiVerification(UUID propertyId, UUID userId) {
         Property property = propertyRepository.findById(propertyId)
@@ -49,16 +64,68 @@ public class AiVerificationService {
             aiVerificationRepository.save(existing);
         });
 
-        // Seed some mock verification scores
+        // Fetch related data
+        List<PropertyDocument> docs = documentRepository.findByPropertyIdAndIsActiveTrue(propertyId);
+        List<DuplicateClaim> claims = duplicateClaimRepository.findByPropertyAIdOrPropertyBId(propertyId, propertyId);
+        List<FraudReport> frauds = fraudReportRepository.findByPropertyId(propertyId);
+
+        // 1. Forgery Score
+        double forgery = 0.0;
+        boolean ownershipMatch = false;
+        if (docs == null || docs.isEmpty()) {
+            forgery = 50.0; // High forgery risk if no documents exist
+        } else {
+            forgery = 5.0; // Base score
+            for (PropertyDocument doc : docs) {
+                if ("FAILED".equals(doc.getOcrStatus())) forgery += 20.0;
+                if ("REJECTED".equals(doc.getVerificationStatus())) forgery += 30.0;
+                if (("SALE_DEED".equals(doc.getDocumentType()) || "PATTA".equals(doc.getDocumentType())) &&
+                    !"FAILED".equals(doc.getOcrStatus()) && !"REJECTED".equals(doc.getVerificationStatus())) {
+                    ownershipMatch = true;
+                }
+            }
+        }
+        forgery = Math.min(forgery, 100.0);
+
+        // 2. Duplicate Score
+        double duplicate = 0.0;
+        if (claims != null && !claims.isEmpty()) {
+            for (DuplicateClaim claim : claims) {
+                if (claim.getSimilarity() != null && claim.getSimilarity().doubleValue() > duplicate) {
+                    duplicate = claim.getSimilarity().doubleValue();
+                }
+            }
+        }
+
+        // 3. Risk Score
+        double risk = 0.0;
+        if (frauds != null) {
+            for (FraudReport fraud : frauds) {
+                if ("SUBMITTED".equals(fraud.getStatus()) || "UNDER_INVESTIGATION".equals(fraud.getStatus())) {
+                    risk += 25.0;
+                }
+            }
+        }
+        risk = Math.min(risk, 100.0);
+
+        // 4. Overall Trust Score
+        double trust = 100.0 - (forgery * 0.4 + duplicate * 0.4 + risk * 0.2);
+        trust = Math.max(trust, 0.0);
+
+        String summary = "LandLens AI Trust engine analysis complete. ";
+        if (trust > 80) summary += "High confidence. Bounds clear.";
+        else if (trust > 50) summary += "Medium confidence. Some flags detected.";
+        else summary += "Low confidence. Significant risks detected.";
+
         AiVerification report = new AiVerification();
         report.setProperty(property);
-        report.setAiTrustScore(new BigDecimal("88.50"));
-        report.setForgeryScore(new BigDecimal("5.20"));
-        report.setDuplicateScore(new BigDecimal("0.00"));
-        report.setOwnershipMatch(true);
-        report.setRiskScore(new BigDecimal("8.00"));
-        report.setConfidence(new BigDecimal("96.20"));
-        report.setSummary("LandLens AI Trust engine analysis complete. High confidence ownership match. Bounds clear.");
+        report.setAiTrustScore(BigDecimal.valueOf(trust));
+        report.setForgeryScore(BigDecimal.valueOf(forgery));
+        report.setDuplicateScore(BigDecimal.valueOf(duplicate));
+        report.setOwnershipMatch(ownershipMatch);
+        report.setRiskScore(BigDecimal.valueOf(risk));
+        report.setConfidence(BigDecimal.valueOf(Math.min(trust + 5.0, 100.0)));
+        report.setSummary(summary);
         report.setIsActive(true);
         report.setGeneratedDate(Instant.now());
 
@@ -72,7 +139,7 @@ public class AiVerificationService {
         VerificationTimeline timeline = new VerificationTimeline();
         timeline.setProperty(property);
         timeline.setAction("AI_COMPLETED");
-        timeline.setRemarks("AI Trust evaluation finished. Trust Score: 88.50%. Status updated to PENDING_GOVT.");
+        timeline.setRemarks(String.format("AI Trust evaluation finished. Trust Score: %.2f%%. Status updated to PENDING_GOVT.", trust));
         timeline.setUser(user);
         timeline.setTimestamp(Instant.now());
         timeline.setIsActive(true);
@@ -85,7 +152,7 @@ public class AiVerificationService {
                 notificationService.sendNotification(
                     property.getProvider().getId(),
                     "AI Trust Audit Completed",
-                    "AI verification analysis is complete for your property \"" + property.getTitle() + "\". Trust Score: 88.50%. The listing has been routed to the government verification queue.",
+                    String.format("AI verification analysis is complete for your property \"%s\". Trust Score: %.2f%%. The listing has been routed to the government verification queue.", property.getTitle(), trust),
                     "AI_AUDIT"
                 );
             }
@@ -96,7 +163,7 @@ public class AiVerificationService {
                 notificationService.sendNotification(
                     officer.getId(),
                     "New Property Pending Review",
-                    "Property \"" + property.getTitle() + "\" has passed AI Trust Audit with a score of 88.50%. It is now pending your manual records audit.",
+                    String.format("Property \"%s\" has passed AI Trust Audit with a score of %.2f%%. It is now pending your manual records audit.", property.getTitle(), trust),
                     "PENDING_AUDIT"
                 );
             }
