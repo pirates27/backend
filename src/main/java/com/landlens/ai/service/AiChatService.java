@@ -13,6 +13,17 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.springframework.beans.factory.annotation.Value;
 
 @Service
 public class AiChatService {
@@ -25,6 +36,12 @@ public class AiChatService {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Value("${openai.api.key}")
+    private String openAiApiKey;
 
     @Transactional
     public AiConversation startConversation(UUID userId, String title) {
@@ -61,24 +78,60 @@ public class AiChatService {
         userMsg.setIsActive(true);
         messageRepository.save(userMsg);
 
-        // Generate Mock AI Response
-        String query = content.toLowerCase();
-        String aiResponseText;
-        if (query.contains("patta") || query.contains("deed")) {
-            aiResponseText = "Patta and Sale Deeds are official registry titles. LandLens AI scans OCR transcripts to check if the uploaded document owner matches the property listing provider.";
-        } else if (query.contains("trust") || query.contains("score")) {
-            aiResponseText = "The AI Trust Score is derived from bounds overlap, OCR verification, and history checks. Any score above 80 is considered high trust.";
-        } else if (query.contains("timeline") || query.contains("status")) {
-            aiResponseText = "The verification timeline logs every transition state. Properties progress from PENDING_AI -> PENDING_GOVT -> APPROVED or REJECTED.";
-        } else {
-            aiResponseText = "Hello! I am your LandLens AI verification assistant. Ask me questions about property trust scores, document OCR status, or timelines.";
+        String aiResponseText = "";
+        try {
+            // Get conversation history
+            List<AiMessage> history = messageRepository.findByConversationIdAndIsActiveTrueOrderByTimestampAsc(conversationId);
+            
+            ObjectNode requestBody = objectMapper.createObjectNode();
+            requestBody.put("model", "openai/gpt-oss-120b");
+            requestBody.put("temperature", 0.7);
+            requestBody.put("max_tokens", 1024);
+            
+            ArrayNode messagesArray = requestBody.putArray("messages");
+            
+            // System prompt
+            ObjectNode systemMsg = messagesArray.addObject();
+            systemMsg.put("role", "system");
+            systemMsg.put("content", "You are LandLens AI, an expert property verification assistant in India. You help users understand property trust scores, land documents like Patta and Sale Deeds, and verification timelines. Keep your answers concise, helpful, and professional.");
+            
+            // Add history
+            for (AiMessage msg : history) {
+                ObjectNode msgNode = messagesArray.addObject();
+                String role = msg.getSenderRole().equalsIgnoreCase("USER") ? "user" : "assistant";
+                msgNode.put("role", role);
+                msgNode.put("content", msg.getContent());
+            }
+
+            HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(15))
+                    .build();
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://integrate.api.nvidia.com/v1/chat/completions"))
+                    .header("Authorization", "Bearer " + openAiApiKey)
+                    .header("Content-Type", "application/json")
+                    .header("Accept", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
+                    .build();
+
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) {
+                JsonNode root = objectMapper.readTree(response.body());
+                aiResponseText = root.path("choices").path(0).path("message").path("content").asText();
+            } else {
+                aiResponseText = "Sorry, I am currently facing technical issues reaching the AI server. Code: " + response.statusCode();
+            }
+        } catch (Exception e) {
+            aiResponseText = "Sorry, an internal error occurred while processing your request: " + e.getMessage();
         }
 
         AiMessage aiMsg = new AiMessage();
         aiMsg.setConversation(conversation);
         aiMsg.setSenderRole("AI");
         aiMsg.setContent(aiResponseText);
-        aiMsg.setTimestamp(Instant.now().plusMillis(500)); // slightly offset
+        aiMsg.setTimestamp(Instant.now().plusMillis(500));
         aiMsg.setIsActive(true);
         
         return messageRepository.save(aiMsg);
