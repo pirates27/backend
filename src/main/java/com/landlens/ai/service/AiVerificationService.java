@@ -66,11 +66,6 @@ public class AiVerificationService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Delete any existing AI report for this property
-        aiVerificationRepository.findByPropertyIdAndIsActiveTrue(propertyId).ifPresent(existing -> {
-            existing.setIsActive(false);
-            aiVerificationRepository.save(existing);
-        });
 
         // Fetch related data
         List<PropertyDocument> docs = documentRepository.findByPropertyIdAndIsActiveTrue(propertyId);
@@ -178,8 +173,13 @@ public class AiVerificationService {
             reasoning = "N/A";
         }
 
-        AiVerification report = new AiVerification();
-        report.setProperty(property);
+        AiVerification report = aiVerificationRepository.findByPropertyIdAndIsActiveTrue(propertyId)
+                .orElseGet(() -> {
+                    AiVerification newReport = new AiVerification();
+                    newReport.setProperty(property);
+                    return newReport;
+                });
+
         report.setAiTrustScore(BigDecimal.valueOf(trust));
         report.setForgeryScore(BigDecimal.valueOf(forgery));
         report.setDuplicateScore(BigDecimal.valueOf(duplicate));
@@ -191,7 +191,7 @@ public class AiVerificationService {
         report.setIsActive(true);
         report.setGeneratedDate(Instant.now());
 
-        AiVerification savedReport = aiVerificationRepository.save(report);
+        report = aiVerificationRepository.save(report);
 
         // Update Property Status
         property.setStatus("PENDING_GOVT");
