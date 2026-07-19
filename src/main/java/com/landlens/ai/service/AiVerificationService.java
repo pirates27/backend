@@ -28,6 +28,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.jdbc.core.JdbcTemplate;
+import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Value;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -49,6 +52,34 @@ public class AiVerificationService {
 
     @Autowired
     private NotificationService notificationService;
+
+    private final ObjectMapper objectMapper;
+    private final JdbcTemplate jdbcTemplate;
+
+    @Value("${openai.api.key}")
+    private String openAiApiKey;
+
+    @Autowired
+    public AiVerificationService(AiVerificationRepository aiVerificationRepository,
+                                 PropertyRepository propertyRepository,
+                                 RestTemplate restTemplate,
+                                 ObjectMapper objectMapper,
+                                 JdbcTemplate jdbcTemplate) {
+        this.aiVerificationRepository = aiVerificationRepository;
+        this.propertyRepository = propertyRepository;
+        this.objectMapper = objectMapper;
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    @PostConstruct
+    public void migrateDatabaseSchema() {
+        try {
+            jdbcTemplate.execute("ALTER TABLE ai_verifications ADD COLUMN reasoning TEXT");
+            System.out.println("Successfully added reasoning column to ai_verifications table.");
+        } catch (Exception e) {
+            System.out.println("Database migration skipped: reasoning column likely already exists. " + e.getMessage());
+        }
+    }
 
     @Autowired
     private PropertyDocumentRepository documentRepository;
