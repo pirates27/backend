@@ -21,11 +21,11 @@ public interface PropertyRepository extends JpaRepository<Property, UUID> {
     List<Property> findByProviderIdAndIsActiveTrue(UUID providerId);
 
     @Query("SELECT p FROM Property p WHERE p.isActive = true " +
-           "AND (:district IS NULL OR p.district LIKE %:district%) " +
-           "AND (:village IS NULL OR p.village LIKE %:village%) " +
-           "AND (:state IS NULL OR p.state LIKE %:state%) " +
-           "AND (:status IS NULL OR p.status = :status) " +
-           "AND (:category IS NULL OR p.category = :category) " +
+           "AND (:district IS NULL OR :district = '' OR p.district LIKE %:district%) " +
+           "AND (:village IS NULL OR :village = '' OR p.village LIKE %:village%) " +
+           "AND (:state IS NULL OR :state = '' OR p.state LIKE %:state%) " +
+           "AND (:status IS NULL OR :status = '' OR p.status = :status) " +
+           "AND (:category IS NULL OR :category = '' OR p.category = :category) " +
            "AND (:minPrice IS NULL OR p.price >= :minPrice) " +
            "AND (:maxPrice IS NULL OR p.price <= :maxPrice)")
     List<Property> searchProperties(
