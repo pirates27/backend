@@ -223,15 +223,19 @@ public class AiVerificationService {
 
         report = aiVerificationRepository.save(report);
 
-        // Update Property Status
-        property.setStatus("PENDING_GOVT");
-        propertyRepository.save(property);
+        // Update Property Status only if it was PENDING_AI
+        boolean statusChanged = false;
+        if ("PENDING_AI".equals(property.getStatus())) {
+            property.setStatus("PENDING_GOVT");
+            propertyRepository.save(property);
+            statusChanged = true;
+        }
 
         // Log Timeline
         VerificationTimeline timeline = new VerificationTimeline();
         timeline.setProperty(property);
-        timeline.setAction("AI_COMPLETED");
-        timeline.setRemarks(String.format("AI Trust evaluation finished. Trust Score: %.2f%%. Status updated to PENDING_GOVT.", trust));
+        timeline.setAction(statusChanged ? "AI_COMPLETED" : "AI_RE_VERIFIED");
+        timeline.setRemarks(String.format("AI Trust evaluation finished. Trust Score: %.2f%%.%s", trust, statusChanged ? " Status updated to PENDING_GOVT." : " Status remained unchanged."));
         timeline.setUser(user);
         timeline.setTimestamp(Instant.now());
         timeline.setIsActive(true);
