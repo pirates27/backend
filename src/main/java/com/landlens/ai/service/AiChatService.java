@@ -93,7 +93,7 @@ public class AiChatService {
             // System prompt
             ObjectNode systemMsg = messagesArray.addObject();
             systemMsg.put("role", "system");
-            systemMsg.put("content", "You are LandLens AI, an expert property verification assistant in India. You help users understand property trust scores, land documents like Patta and Sale Deeds, and verification timelines. Keep your answers concise, helpful, and professional.");
+            systemMsg.put("content", "You are LandLens AI, an expert property verification assistant in India. You help users understand property trust scores, land documents like Patta and Sale Deeds, and verification timelines. Keep your answers concise, helpful, and professional.\n\nIMPORTANT: Use Markdown tables when presenting structured data. If you recommend a specific property and you know its propertyId, you MUST output a JSON block like this so the frontend can render an interactive Property Card:\n```json\n{ \"type\": \"property\", \"propertyId\": \"the-uuid-here\" }\n```");
             
             // Add history
             for (AiMessage msg : history) {
