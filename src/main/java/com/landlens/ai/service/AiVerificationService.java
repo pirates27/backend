@@ -62,7 +62,6 @@ public class AiVerificationService {
     @Autowired
     public AiVerificationService(AiVerificationRepository aiVerificationRepository,
                                  PropertyRepository propertyRepository,
-                                 RestTemplate restTemplate,
                                  ObjectMapper objectMapper,
                                  JdbcTemplate jdbcTemplate) {
         this.aiVerificationRepository = aiVerificationRepository;
