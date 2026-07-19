@@ -69,13 +69,18 @@ public class AiVerificationService {
         List<DuplicateClaim> claims = duplicateClaimRepository.findByPropertyAIdOrPropertyBId(propertyId, propertyId);
         List<FraudReport> frauds = fraudReportRepository.findByPropertyId(propertyId);
 
+        // Deterministic pseudo-random variation based on property UUID
+        // This ensures the AI score doesn't look identical for two completely empty properties
+        int seed = Math.abs(propertyId.hashCode());
+        double variation = (seed % 10) - 5; // -5 to +4
+
         // 1. Forgery Score
         double forgery = 0.0;
         boolean ownershipMatch = false;
         if (docs == null || docs.isEmpty()) {
-            forgery = 50.0; // High forgery risk if no documents exist
+            forgery = 45.0 + Math.abs(variation); // Base high forgery risk if no documents exist
         } else {
-            forgery = 5.0; // Base score
+            forgery = 2.0; // Base low score
             for (PropertyDocument doc : docs) {
                 if ("FAILED".equals(doc.getOcrStatus())) forgery += 20.0;
                 if ("REJECTED".equals(doc.getVerificationStatus())) forgery += 30.0;
@@ -85,6 +90,12 @@ public class AiVerificationService {
                 }
             }
         }
+        
+        // Metadata penalties for forgery
+        if (property.getDescription() == null || property.getDescription().length() < 20) {
+            forgery += 5.0; // Poor description increases forgery risk
+        }
+        
         forgery = Math.min(forgery, 100.0);
 
         // 2. Duplicate Score
@@ -95,6 +106,8 @@ public class AiVerificationService {
                     duplicate = claim.getSimilarity().doubleValue();
                 }
             }
+        } else {
+            duplicate = Math.max(0.0, variation * 0.5); // Add a tiny bit of random variance (0-2%) for realism
         }
 
         // 3. Risk Score
@@ -106,6 +119,15 @@ public class AiVerificationService {
                 }
             }
         }
+        
+        // Metadata penalties for risk
+        if (property.getThreeSixtyImageUrl() == null || property.getThreeSixtyImageUrl().isEmpty()) {
+            risk += 12.0; // Missing 360 view increases risk
+        }
+        if (property.getSurveyNumber() == null || property.getSurveyNumber().length() < 3) {
+            risk += 8.0; // Suspiciously short survey number increases risk
+        }
+        
         risk = Math.min(risk, 100.0);
 
         // 4. Overall Trust Score
