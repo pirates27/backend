@@ -233,7 +233,7 @@ public class AiVerificationService {
             // Ignore notification errors to prevent transaction rollback
         }
 
-        return savedReport;
+        return report;
     }
 
     public AiVerification getReportByPropertyId(UUID propertyId) {
