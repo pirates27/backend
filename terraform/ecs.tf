@@ -96,6 +96,9 @@ resource "aws_ecs_service" "main" {
   deployment_minimum_healthy_percent = 100
   deployment_maximum_percent         = 200
 
+  # Allow the Spring Boot app up to 3 minutes to boot up before ALB health checks can trigger a task termination
+  health_check_grace_period_seconds  = 180
+
   # Network Configuration (Place tasks in private subnets with NAT routing)
   network_configuration {
     subnets          = [aws_subnet.private_1.id, aws_subnet.private_2.id]
