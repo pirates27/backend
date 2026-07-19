@@ -19,5 +19,6 @@ public class AiVerificationResponseDto {
     private BigDecimal riskScore;
     private String summary;
     private BigDecimal confidence;
+    private String reasoning;
     private Instant generatedDate;
 }

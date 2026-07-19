@@ -289,7 +289,15 @@ Invoke-TestRequest -Method Post -Uri "$baseUrl/api/documents/$docId/ocr" -Header
 # -------------------------------------------------------------
 Write-Host "`n[8] Testing AI Verification Engine..." -ForegroundColor Yellow
 Invoke-TestRequest -Method Post -Uri "$baseUrl/api/properties/$propertyId/ai-verify" -Headers $providerHeaders -ExpectedStatus 200 -Description "Trigger AI Land Verification Engine" | Out-Null
-Invoke-TestRequest -Method Get -Uri "$baseUrl/api/properties/$propertyId/ai-verification" -ExpectedStatus 200 -Description "Get AI Verification Trust Report" | Out-Null
+$aiVerifyJson = Invoke-TestRequest -Method Get -Uri "$baseUrl/api/properties/$propertyId/ai-verification" -ExpectedStatus 200 -Description "Get AI Verification Trust Report"
+if ($aiVerifyJson) {
+    $aiVerifyObj = $aiVerifyJson | ConvertFrom-Json
+    if ($aiVerifyObj.reasoning) {
+        Write-Host "         [AI REASONING]: $($aiVerifyObj.reasoning.Substring(0, [Math]::Min(150, $aiVerifyObj.reasoning.Length)))..." -ForegroundColor Cyan
+    } else {
+        Write-Host "         [WARNING]: AI Reasoning field was empty or missing!" -ForegroundColor Yellow
+    }
+}
 
 # -------------------------------------------------------------
 # 9. Government Verification

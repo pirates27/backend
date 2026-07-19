@@ -54,6 +54,7 @@ public class AiMapper {
         dto.setRiskScore(verify.getRiskScore());
         dto.setSummary(verify.getSummary());
         dto.setConfidence(verify.getConfidence());
+        dto.setReasoning(verify.getReasoning());
         dto.setGeneratedDate(verify.getGeneratedDate());
         return dto;
     }
