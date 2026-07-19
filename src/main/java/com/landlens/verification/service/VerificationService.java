@@ -47,21 +47,21 @@ public class VerificationService {
             throw new RuntimeException("Unauthorized: User must be a Government Officer or Admin");
         }
 
-        // Delete any existing review
-        governmentVerificationRepository.findByPropertyIdAndIsActiveTrue(propertyId).ifPresent(existing -> {
-            existing.setIsActive(false);
-            governmentVerificationRepository.save(existing);
-        });
+        // Reuse existing verification if present, otherwise use the new review object
+        GovernmentVerification finalReview = governmentVerificationRepository.findByPropertyIdAndIsActiveTrue(propertyId)
+                .orElse(review);
 
-        review.setProperty(property);
-        review.setOfficer(officer);
-        review.setVerifiedDate(Instant.now());
-        review.setIsActive(true);
+        finalReview.setProperty(property);
+        finalReview.setOfficer(officer);
+        finalReview.setStatus(review.getStatus());
+        finalReview.setRemarks(review.getRemarks());
+        finalReview.setVerifiedDate(Instant.now());
+        finalReview.setIsActive(true);
 
-        GovernmentVerification savedReview = governmentVerificationRepository.save(review);
+        GovernmentVerification savedReview = governmentVerificationRepository.save(finalReview);
 
         // Update Property Status
-        property.setStatus(review.getStatus().toUpperCase());
+        property.setStatus(finalReview.getStatus().toUpperCase());
         propertyRepository.save(property);
 
         // Append to Timeline
