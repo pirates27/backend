@@ -47,6 +47,9 @@ public class AiVerification extends BaseAuditEntity {
     @Column(name = "summary", columnDefinition = "TEXT")
     private String summary;
 
+    @Column(name = "reasoning", columnDefinition = "TEXT")
+    private String reasoning;
+
     @Column(name = "confidence", precision = 5, scale = 2, nullable = false)
     private BigDecimal confidence;
 

@@ -85,6 +85,7 @@ public class AiVerificationService {
         boolean ownershipMatch = false;
         double confidence = 0.0;
         String summary = "";
+        String reasoning = "";
 
         try {
             ObjectMapper mapper = new ObjectMapper();
@@ -155,6 +156,12 @@ public class AiVerificationService {
                 ownershipMatch = llmResult.path("ownershipMatch").asBoolean(false);
                 confidence = llmResult.path("confidence").asDouble(50.0);
                 summary = llmResult.path("summary").asText("LLM verification complete.");
+                
+                // Extract reasoning trace if available
+                JsonNode messageObj = responseNode.path("choices").get(0).path("message");
+                if (messageObj.has("reasoning_content") && !messageObj.path("reasoning_content").isNull()) {
+                    reasoning = messageObj.path("reasoning_content").asText();
+                }
             } else {
                 throw new RuntimeException("API Call failed with status: " + response.statusCode());
             }
@@ -168,6 +175,7 @@ public class AiVerificationService {
             ownershipMatch = (docs != null && !docs.isEmpty());
             confidence = 40.0;
             summary = "Fallback verification used due to AI service timeout. " + e.getMessage();
+            reasoning = "N/A";
         }
 
         AiVerification report = new AiVerification();
@@ -179,6 +187,7 @@ public class AiVerificationService {
         report.setRiskScore(BigDecimal.valueOf(risk));
         report.setConfidence(BigDecimal.valueOf(Math.min(trust + 5.0, 100.0)));
         report.setSummary(summary);
+        report.setReasoning(reasoning);
         report.setIsActive(true);
         report.setGeneratedDate(Instant.now());
 
