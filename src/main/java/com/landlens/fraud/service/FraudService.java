@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
+import com.landlens.common.exception.ResourceNotFoundException;
+import com.landlens.common.exception.InvalidRequestException;
 
 @Service
 public class FraudService {
@@ -48,12 +50,12 @@ public class FraudService {
     @Transactional
     public FraudReport assignOfficer(UUID reportId, UUID officerId) {
         FraudReport report = fraudReportRepository.findById(reportId)
-                .orElseThrow(() -> new RuntimeException("Fraud report not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Fraud report not found"));
         User officer = userRepository.findById(officerId)
-                .orElseThrow(() -> new RuntimeException("Officer not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Officer not found"));
 
         if (!officer.getRole().getName().equals("GOVERNMENT_OFFICER") && !officer.getRole().getName().equals("ADMIN")) {
-            throw new RuntimeException("Assignee must be a Government Officer or Admin");
+            throw new InvalidRequestException("Assignee must be a Government Officer or Admin");
         }
 
         report.setOfficer(officer);
@@ -64,7 +66,7 @@ public class FraudService {
     @Transactional
     public FraudReport resolveReport(UUID reportId, String status) {
         FraudReport report = fraudReportRepository.findById(reportId)
-                .orElseThrow(() -> new RuntimeException("Fraud report not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Fraud report not found"));
 
         // Valid statuses: RESOLVED_FRAUD, RESOLVED_DISMISSED
         report.setStatus(status.toUpperCase());
@@ -91,9 +93,9 @@ public class FraudService {
     public DuplicateClaim createDuplicateClaim(DuplicateClaim claim) {
         // Enforce validations if properties exist
         propertyRepository.findById(claim.getPropertyA().getId())
-                .orElseThrow(() -> new RuntimeException("Property A not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Property A not found"));
         propertyRepository.findById(claim.getPropertyB().getId())
-                .orElseThrow(() -> new RuntimeException("Property B not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Property B not found"));
 
         claim.setStatus("FLAGGED");
         claim.setIsActive(true);

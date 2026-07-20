@@ -16,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import com.landlens.common.exception.ResourceNotFoundException;
+import com.landlens.common.exception.UnauthorizedException;
 
 @Service
 public class VerificationService {
@@ -38,13 +40,13 @@ public class VerificationService {
     @Transactional
     public GovernmentVerification verifyProperty(UUID propertyId, GovernmentVerification review, UUID officerId) {
         Property property = propertyRepository.findById(propertyId)
-                .orElseThrow(() -> new RuntimeException("Property not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Property not found"));
         User officer = userRepository.findById(officerId)
-                .orElseThrow(() -> new RuntimeException("Officer not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Officer not found"));
 
         // Enforce role check
         if (!officer.getRole().getName().equals("GOVERNMENT_OFFICER") && !officer.getRole().getName().equals("ADMIN")) {
-            throw new RuntimeException("Unauthorized: User must be a Government Officer or Admin");
+            throw new UnauthorizedException("Unauthorized: User must be a Government Officer or Admin");
         }
 
         // Reuse existing verification if present, otherwise use the new review object

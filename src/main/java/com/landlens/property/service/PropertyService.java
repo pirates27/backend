@@ -13,6 +13,10 @@ import com.landlens.property.repository.SavedPropertyRepository;
 import com.landlens.user.model.User;
 import com.landlens.user.repository.UserRepository;
 import com.landlens.notification.service.NotificationService;
+import com.landlens.common.exception.ResourceNotFoundException;
+import com.landlens.common.exception.InvalidRequestException;
+import com.landlens.common.exception.UnauthorizedException;
+import java.util.Random;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +28,8 @@ import java.util.UUID;
 
 @Service
 public class PropertyService {
+
+    private static final Random random = new Random();
 
     @Autowired
     private PropertyRepository propertyRepository;
@@ -49,10 +55,10 @@ public class PropertyService {
     @Transactional
     public Property createProperty(Property property, UUID providerId) {
         User provider = userRepository.findById(providerId)
-                .orElseThrow(() -> new RuntimeException("Provider not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Provider not found"));
 
         property.setProvider(provider);
-        property.setPropertyCode("LL-" + System.currentTimeMillis() + "-" + (int)(Math.random() * 1000));
+        property.setPropertyCode("LL-" + System.currentTimeMillis() + "-" + random.nextInt(1000));
         property.setStatus("PENDING_AI");
         property.setIsActive(true);
 
@@ -72,18 +78,18 @@ public class PropertyService {
 
     public Property getPropertyById(UUID id) {
         Property property = propertyRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Property not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Property not found"));
         if (!property.getIsActive()) {
-            throw new RuntimeException("Property is inactive");
+            throw new InvalidRequestException("Property is inactive");
         }
         return property;
     }
 
     public Property getPropertyByCode(String code) {
         Property property = propertyRepository.findByPropertyCode(code)
-                .orElseThrow(() -> new RuntimeException("Property not found with code: " + code));
+                .orElseThrow(() -> new ResourceNotFoundException("Property not found with code: " + code));
         if (!property.getIsActive()) {
-            throw new RuntimeException("Property is inactive");
+            throw new InvalidRequestException("Property is inactive");
         }
         return property;
     }
@@ -100,7 +106,7 @@ public class PropertyService {
         
         // Ensure user is the owner provider
         if (!property.getProvider().getId().equals(providerId)) {
-            throw new RuntimeException("Unauthorized update: not the listing owner");
+            throw new UnauthorizedException("Unauthorized update: not the listing owner");
         }
 
         property.setTitle(details.getTitle());
@@ -137,7 +143,7 @@ public class PropertyService {
     public void deleteProperty(UUID id, UUID providerId) {
         Property property = getPropertyById(id);
         if (!property.getProvider().getId().equals(providerId)) {
-            throw new RuntimeException("Unauthorized delete: not the listing owner");
+            throw new UnauthorizedException("Unauthorized delete: not the listing owner");
         }
         property.setIsActive(false);
         propertyRepository.save(property);
@@ -170,7 +176,7 @@ public class PropertyService {
     @Transactional
     public SavedProperty saveProperty(UUID propertyId, UUID buyerId) {
         User buyer = userRepository.findById(buyerId)
-                .orElseThrow(() -> new RuntimeException("Buyer not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Buyer not found"));
         Property property = getPropertyById(propertyId);
 
         Optional<SavedProperty> existing = savedPropertyRepository
@@ -202,7 +208,7 @@ public class PropertyService {
     @Transactional
     public PropertyVisit scheduleVisit(UUID propertyId, UUID buyerId, PropertyVisit visit) {
         User buyer = userRepository.findById(buyerId)
-                .orElseThrow(() -> new RuntimeException("Buyer not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Buyer not found"));
         Property property = getPropertyById(propertyId);
 
         visit.setBuyer(buyer);
@@ -227,7 +233,7 @@ public class PropertyService {
     @Transactional
     public PropertyVisit updateVisitStatus(UUID visitId, String status, UUID userId) {
         PropertyVisit visit = propertyVisitRepository.findById(visitId)
-                .orElseThrow(() -> new RuntimeException("Visit details not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Visit details not found"));
         
         // Allowed roles or users can update. For simplicity, just update status
         visit.setStatus(status.toUpperCase());

@@ -102,7 +102,7 @@ public class AiChatService {
                 ObjectNode msgNode = messagesArray.addObject();
                 String role = msg.getSenderRole().equalsIgnoreCase("USER") ? "user" : "assistant";
                 msgNode.put("role", role);
-                msgNode.put(CONTENT_KEY, msg.getContent());
+                msgNode.set(CONTENT_KEY, msgNode.textNode(msg.getContent()));
             }
 
             try (HttpClient client = HttpClient.newBuilder()
