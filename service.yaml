@@ -15,11 +15,11 @@ spec:
             - name: SPRING_PROFILES_ACTIVE
               value: prod
             - name: DB_URL
-              value: "jdbc:mysql://srv1117.hstgr.io:3306/u833088220_ll1234?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+              value: "jdbc:mysql://srv1117.hstgr.io:3306/u833088220_Priya_teamlead?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
             - name: DB_USERNAME
-              value: "u833088220_ll1234"
+              value: "u833088220_Priya_teamlead"
             - name: DB_PASSWORD
-              value: "ll12342D"
+              value: "Priya_teamlead@1234567"
             - name: JWT_SECRET
               value: "9a2f3f4e5d6c7b8a9f0e1d2c3b4a5f6e7d8c9b0a1f2e3d4c5b6a7f8e9d0c1b2a3"
           resources:

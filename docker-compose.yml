@@ -6,9 +6,9 @@ services:
     image: mysql:8.0
     container_name: landlens-mysql-dev
     environment:
-      MYSQL_DATABASE: u833088220_ll1234
-      MYSQL_USER: u833088220_ll1234
-      MYSQL_PASSWORD: ll12342D
+      MYSQL_DATABASE: u833088220_Priya_teamlead
+      MYSQL_USER: u833088220_Priya_teamlead
+      MYSQL_PASSWORD: Priya_teamlead@1234567
       MYSQL_ROOT_PASSWORD: Land_lens_root_password
     ports:
       - "3306:3306"
@@ -17,7 +17,7 @@ services:
     networks:
       - landlens-network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "u833088220_ll1234", "-pll12342D"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "u833088220_Priya_teamlead", "-pPriya_teamlead@1234567"]
       timeout: 5s
       retries: 5
       interval: 10s
@@ -31,9 +31,9 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - DB_URL=jdbc:mysql://mysql:3306/u833088220_ll1234?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&useInformationSchema=true
-      - DB_USERNAME=u833088220_ll1234
-      - DB_PASSWORD=ll12342D
+      - DB_URL=jdbc:mysql://srv1117.hstgr.io:3306/u833088220_Priya_teamlead?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&useInformationSchema=true
+      - DB_USERNAME=u833088220_Priya_teamlead
+      - DB_PASSWORD=Priya_teamlead@1234567
       - JWT_SECRET=9a2f3f4e5d6c7b8a9f0e1d2c3b4a5f6e7d8c9b0a1f2e3d4c5b6a7f8e9d0c1b2a3
       - SPRING_PROFILES_ACTIVE=dev
     depends_on:

@@ -1,5 +1,6 @@
 package com.landlens.ai.service;
 
+import com.landlens.ai.exception.AiVerificationApiException;
 import com.landlens.ai.model.AiVerification;
 import com.landlens.ai.repository.AiVerificationRepository;
 import com.landlens.property.model.Property;
@@ -34,9 +35,14 @@ import org.springframework.beans.factory.annotation.Value;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class AiVerificationService {
+
+    private static final Logger logger = LoggerFactory.getLogger(AiVerificationService.java);
+    private static final String REASONING_CONTENT_KEY = "reasoning_content";
 
     @Autowired
     private AiVerificationRepository aiVerificationRepository;
@@ -52,6 +58,15 @@ public class AiVerificationService {
 
     @Autowired
     private NotificationService notificationService;
+
+    @Autowired
+    private PropertyDocumentRepository documentRepository;
+
+    @Autowired
+    private DuplicateClaimRepository duplicateClaimRepository;
+
+    @Autowired
+    private FraudReportRepository fraudReportRepository;
 
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
@@ -74,20 +89,11 @@ public class AiVerificationService {
     public void migrateDatabaseSchema() {
         try {
             jdbcTemplate.execute("ALTER TABLE ai_verifications ADD COLUMN reasoning TEXT");
-            System.out.println("Successfully added reasoning column to ai_verifications table.");
+            logger.info("Successfully added reasoning column to ai_verifications table.");
         } catch (Exception e) {
-            System.out.println("Database migration skipped: reasoning column likely already exists. " + e.getMessage());
+            logger.warn("Database migration skipped: reasoning column likely already exists. {}", e.getMessage());
         }
     }
-
-    @Autowired
-    private PropertyDocumentRepository documentRepository;
-
-    @Autowired
-    private DuplicateClaimRepository duplicateClaimRepository;
-
-    @Autowired
-    private FraudReportRepository fraudReportRepository;
 
     @Transactional
     public AiVerification triggerAiVerification(UUID propertyId, UUID userId) {
@@ -96,59 +102,25 @@ public class AiVerificationService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-
-        // Fetch related data
         List<PropertyDocument> docs = documentRepository.findByPropertyIdAndIsActiveTrue(propertyId);
         List<DuplicateClaim> claims = duplicateClaimRepository.findByPropertyAIdOrPropertyBId(propertyId, propertyId);
         List<FraudReport> frauds = fraudReportRepository.findByPropertyId(propertyId);
 
-        // Call NVIDIA LLM for verification
-        double trust = 0.0;
-        double forgery = 0.0;
-        double duplicate = 0.0;
-        double risk = 0.0;
-        boolean ownershipMatch = false;
-        double confidence = 0.0;
-        String summary = "";
-        String reasoning = "";
+        AiVerificationResult result = performLlmVerification(property, docs, frauds, claims);
 
+        AiVerification report = saveVerificationReport(propertyId, property, result);
+        boolean statusChanged = updatePropertyStatus(property);
+        logVerificationTimeline(property, user, result.trust, statusChanged);
+        sendVerificationNotifications(property, result.trust);
+
+        return report;
+    }
+
+    private AiVerificationResult performLlmVerification(Property property, List<PropertyDocument> docs, List<FraudReport> frauds, List<DuplicateClaim> claims) {
+        AiVerificationResult result = new AiVerificationResult();
         try {
-            ObjectMapper mapper = new ObjectMapper();
-            
-            // Construct context string
-            StringBuilder context = new StringBuilder();
-            context.append("Property Title: ").append(property.getTitle()).append("\n");
-            context.append("Property Desc: ").append(property.getDescription()).append("\n");
-            context.append("Survey No: ").append(property.getSurveyNumber()).append("\n");
-            context.append("Has 360 Image: ").append(property.getThreeSixtyImageUrl() != null).append("\n");
-            
-            context.append("Documents:\n");
-            if (docs == null || docs.isEmpty()) {
-                context.append("NONE\n");
-            } else {
-                for (PropertyDocument doc : docs) {
-                    context.append("- ").append(doc.getDocumentType()).append(" (OCR: ").append(doc.getOcrStatus()).append(", VERIFY: ").append(doc.getVerificationStatus()).append(")\n");
-                }
-            }
-            
-            context.append("Fraud Reports: ").append(frauds != null ? frauds.size() : 0).append("\n");
-            context.append("Duplicate Claims: ").append(claims != null ? claims.size() : 0).append("\n");
-
-            // Build request JSON
-            ObjectNode rootNode = mapper.createObjectNode();
-            rootNode.put("model", "openai/gpt-oss-120b");
-            rootNode.put("temperature", 1);
-            rootNode.put("top_p", 1);
-            rootNode.put("max_tokens", 1024);
-            rootNode.put("stream", false);
-            
-            ArrayNode messagesArray = rootNode.putArray("messages");
-            ObjectNode messageNode = mapper.createObjectNode();
-            messageNode.put("role", "user");
-            messageNode.put("content", "You are an expert real estate auditor. Analyze the following property data and return your evaluation strictly as a JSON object with NO OTHER TEXT or markdown. Keys must be: 'aiTrustScore' (0-100 float), 'forgeryScore' (0-100 float), 'duplicateScore' (0-100 float), 'riskScore' (0-100 float), 'ownershipMatch' (boolean), 'confidence' (0-100 float), 'summary' (string). Data:\n" + context.toString());
-            messagesArray.add(messageNode);
-
-            String requestBody = mapper.writeValueAsString(rootNode);
+            String context = buildContext(property, docs, frauds, claims);
+            String requestBody = buildRequestBody(context);
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create("https://integrate.api.nvidia.com/v1/chat/completions"))
@@ -157,52 +129,98 @@ public class AiVerificationService {
                     .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                     .build();
 
-            HttpClient client = HttpClient.newHttpClient();
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-            if (response.statusCode() == 200) {
-                JsonNode responseNode = mapper.readTree(response.body());
-                String content = responseNode.path("choices").get(0).path("message").path("content").asText();
-                
-                // Clean up possible markdown code blocks
-                if (content.startsWith("```json")) {
-                    content = content.substring(7);
-                    if (content.endsWith("```")) content = content.substring(0, content.length() - 3);
-                } else if (content.startsWith("```")) {
-                    content = content.substring(3);
-                    if (content.endsWith("```")) content = content.substring(0, content.length() - 3);
+            try (HttpClient client = HttpClient.newHttpClient()) {
+                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() == 200) {
+                    parseLlmResponse(response.body(), result);
+                } else {
+                    throw new AiVerificationApiException("API Call failed with status: " + response.statusCode());
                 }
-                
-                JsonNode llmResult = mapper.readTree(content.trim());
-                trust = llmResult.path("aiTrustScore").asDouble(50.0);
-                forgery = llmResult.path("forgeryScore").asDouble(50.0);
-                duplicate = llmResult.path("duplicateScore").asDouble(0.0);
-                risk = llmResult.path("riskScore").asDouble(0.0);
-                ownershipMatch = llmResult.path("ownershipMatch").asBoolean(false);
-                confidence = llmResult.path("confidence").asDouble(50.0);
-                summary = llmResult.path("summary").asText("LLM verification complete.");
-                
-                // Extract reasoning trace if available
-                JsonNode messageObj = responseNode.path("choices").get(0).path("message");
-                if (messageObj.has("reasoning_content") && !messageObj.path("reasoning_content").isNull()) {
-                    reasoning = messageObj.path("reasoning_content").asText();
-                }
-            } else {
-                throw new RuntimeException("API Call failed with status: " + response.statusCode());
             }
-
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            applyFallbackVerification(docs, claims, frauds, result, e.getMessage());
         } catch (Exception e) {
-            // Fallback to basic heuristics if API fails
-            forgery = (docs == null || docs.isEmpty()) ? 50.0 : 5.0;
-            duplicate = (claims == null || claims.isEmpty()) ? 0.0 : 15.0;
-            risk = (frauds == null || frauds.isEmpty()) ? 0.0 : 25.0;
-            trust = Math.max(100.0 - (forgery * 0.4 + duplicate * 0.4 + risk * 0.2), 0.0);
-            ownershipMatch = (docs != null && !docs.isEmpty());
-            confidence = 40.0;
-            summary = "Fallback verification used due to AI service timeout. " + e.getMessage();
-            reasoning = "N/A";
+            applyFallbackVerification(docs, claims, frauds, result, e.getMessage());
         }
+        return result;
+    }
 
+    private String buildContext(Property property, List<PropertyDocument> docs, List<FraudReport> frauds, List<DuplicateClaim> claims) {
+        StringBuilder context = new StringBuilder();
+        context.append("Property Title: ").append(property.getTitle()).append("\n");
+        context.append("Property Desc: ").append(property.getDescription()).append("\n");
+        context.append("Survey No: ").append(property.getSurveyNumber()).append("\n");
+        context.append("Has 360 Image: ").append(property.getThreeSixtyImageUrl() != null).append("\n");
+        
+        context.append("Documents:\n");
+        if (docs == null || docs.isEmpty()) {
+            context.append("NONE\n");
+        } else {
+            for (PropertyDocument doc : docs) {
+                context.append("- ").append(doc.getDocumentType()).append(" (OCR: ").append(doc.getOcrStatus()).append(", VERIFY: ").append(doc.getVerificationStatus()).append(")\n");
+            }
+        }
+        
+        context.append("Fraud Reports: ").append(frauds != null ? frauds.size() : 0).append("\n");
+        context.append("Duplicate Claims: ").append(claims != null ? claims.size() : 0).append("\n");
+        return context.toString();
+    }
+
+    private String buildRequestBody(String context) throws Exception {
+        ObjectNode rootNode = objectMapper.createObjectNode();
+        rootNode.put("model", "openai/gpt-oss-120b");
+        rootNode.put("temperature", 1);
+        rootNode.put("top_p", 1);
+        rootNode.put("max_tokens", 1024);
+        rootNode.put("stream", false);
+        
+        ArrayNode messagesArray = rootNode.putArray("messages");
+        ObjectNode messageNode = objectMapper.createObjectNode();
+        messageNode.put("role", "user");
+        messageNode.put("content", "You are an expert real estate auditor. Analyze the following property data and return your evaluation strictly as a JSON object with NO OTHER TEXT or markdown. Keys must be: 'aiTrustScore' (0-100 float), 'forgeryScore' (0-100 float), 'duplicateScore' (0-100 float), 'riskScore' (0-100 float), 'ownershipMatch' (boolean), 'confidence' (0-100 float), 'summary' (string). Data:\n" + context);
+        messagesArray.add(messageNode);
+
+        return objectMapper.writeValueAsString(rootNode);
+    }
+
+    private void parseLlmResponse(String responseBody, AiVerificationResult result) throws Exception {
+        JsonNode responseNode = objectMapper.readTree(responseBody);
+        String content = responseNode.path("choices").get(0).path("message").path("content").asText();
+        
+        if (content.startsWith("```json")) {
+            content = content.substring(7);
+            if (content.endsWith("```")) content = content.substring(0, content.length() - 3);
+        } else if (content.startsWith("```")) {
+            content = content.substring(3);
+            if (content.endsWith("```")) content = content.substring(0, content.length() - 3);
+        }
+        
+        JsonNode llmResult = objectMapper.readTree(content.trim());
+        result.trust = llmResult.path("aiTrustScore").asDouble(50.0);
+        result.forgery = llmResult.path("forgeryScore").asDouble(50.0);
+        result.duplicate = llmResult.path("duplicateScore").asDouble(0.0);
+        result.risk = llmResult.path("riskScore").asDouble(0.0);
+        result.ownershipMatch = llmResult.path("ownershipMatch").asBoolean(false);
+        result.summary = llmResult.path("summary").asText("LLM verification complete.");
+        
+        JsonNode messageObj = responseNode.path("choices").get(0).path("message");
+        if (messageObj.has(REASONING_CONTENT_KEY) && !messageObj.path(REASONING_CONTENT_KEY).isNull()) {
+            result.reasoning = messageObj.path(REASONING_CONTENT_KEY).asText();
+        }
+    }
+
+    private void applyFallbackVerification(List<PropertyDocument> docs, List<DuplicateClaim> claims, List<FraudReport> frauds, AiVerificationResult result, String errorMessage) {
+        result.forgery = (docs == null || docs.isEmpty()) ? 50.0 : 5.0;
+        result.duplicate = (claims == null || claims.isEmpty()) ? 0.0 : 15.0;
+        result.risk = (frauds == null || frauds.isEmpty()) ? 0.0 : 25.0;
+        result.trust = Math.max(100.0 - (result.forgery * 0.4 + result.duplicate * 0.4 + result.risk * 0.2), 0.0);
+        result.ownershipMatch = (docs != null && !docs.isEmpty());
+        result.summary = "Fallback verification used due to AI service timeout. " + errorMessage;
+        result.reasoning = "N/A";
+    }
+
+    private AiVerification saveVerificationReport(UUID propertyId, Property property, AiVerificationResult result) {
         AiVerification report = aiVerificationRepository.findByPropertyIdAndIsActiveTrue(propertyId)
                 .orElseGet(() -> {
                     AiVerification newReport = new AiVerification();
@@ -210,28 +228,30 @@ public class AiVerificationService {
                     return newReport;
                 });
 
-        report.setAiTrustScore(BigDecimal.valueOf(trust));
-        report.setForgeryScore(BigDecimal.valueOf(forgery));
-        report.setDuplicateScore(BigDecimal.valueOf(duplicate));
-        report.setOwnershipMatch(ownershipMatch);
-        report.setRiskScore(BigDecimal.valueOf(risk));
-        report.setConfidence(BigDecimal.valueOf(Math.min(trust + 5.0, 100.0)));
-        report.setSummary(summary);
-        report.setReasoning(reasoning);
+        report.setAiTrustScore(BigDecimal.valueOf(result.trust));
+        report.setForgeryScore(BigDecimal.valueOf(result.forgery));
+        report.setDuplicateScore(BigDecimal.valueOf(result.duplicate));
+        report.setOwnershipMatch(result.ownershipMatch);
+        report.setRiskScore(BigDecimal.valueOf(result.risk));
+        report.setConfidence(BigDecimal.valueOf(Math.min(result.trust + 5.0, 100.0)));
+        report.setSummary(result.summary);
+        report.setReasoning(result.reasoning);
         report.setIsActive(true);
         report.setGeneratedDate(Instant.now());
 
-        report = aiVerificationRepository.save(report);
+        return aiVerificationRepository.save(report);
+    }
 
-        // Update Property Status only if it was PENDING_AI
-        boolean statusChanged = false;
+    private boolean updatePropertyStatus(Property property) {
         if ("PENDING_AI".equals(property.getStatus())) {
             property.setStatus("PENDING_GOVT");
             propertyRepository.save(property);
-            statusChanged = true;
+            return true;
         }
+        return false;
+    }
 
-        // Log Timeline
+    private void logVerificationTimeline(Property property, User user, double trust, boolean statusChanged) {
         VerificationTimeline timeline = new VerificationTimeline();
         timeline.setProperty(property);
         timeline.setAction(statusChanged ? "AI_COMPLETED" : "AI_RE_VERIFIED");
@@ -240,10 +260,10 @@ public class AiVerificationService {
         timeline.setTimestamp(Instant.now());
         timeline.setIsActive(true);
         timelineRepository.save(timeline);
+    }
 
-        // Send notifications
+    private void sendVerificationNotifications(Property property, double trust) {
         try {
-            // Notify the provider
             if (property.getProvider() != null) {
                 notificationService.sendNotification(
                     property.getProvider().getId(),
@@ -253,7 +273,6 @@ public class AiVerificationService {
                 );
             }
 
-            // Notify all government officers
             List<User> officers = userRepository.findByRoleName("GOVERNMENT_OFFICER");
             for (User officer : officers) {
                 notificationService.sendNotification(
@@ -264,14 +283,22 @@ public class AiVerificationService {
                 );
             }
         } catch (Exception e) {
-            // Ignore notification errors to prevent transaction rollback
+            logger.error("Failed to send verification notifications", e);
         }
-
-        return report;
     }
 
     public AiVerification getReportByPropertyId(UUID propertyId) {
         return aiVerificationRepository.findByPropertyIdAndIsActiveTrue(propertyId)
                 .orElseThrow(() -> new RuntimeException("AI report not found for this property"));
+    }
+
+    private static class AiVerificationResult {
+        double trust = 0.0;
+        double forgery = 0.0;
+        double duplicate = 0.0;
+        double risk = 0.0;
+        boolean ownershipMatch = false;
+        String summary = "";
+        String reasoning = "";
     }
 }

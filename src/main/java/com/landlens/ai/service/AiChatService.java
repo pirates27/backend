@@ -28,6 +28,8 @@ import org.springframework.beans.factory.annotation.Value;
 @Service
 public class AiChatService {
 
+    private static final String CONTENT_KEY = "content";
+
     @Autowired
     private AiConversationRepository conversationRepository;
 
@@ -93,36 +95,40 @@ public class AiChatService {
             // System prompt
             ObjectNode systemMsg = messagesArray.addObject();
             systemMsg.put("role", "system");
-            systemMsg.put("content", "You are LandLens AI, an expert property verification assistant in India. You help users understand property trust scores, land documents like Patta and Sale Deeds, and verification timelines. Keep your answers concise, helpful, and professional.\n\nIMPORTANT: Use Markdown tables when presenting structured data. If you recommend a specific property and you know its propertyId, you MUST output a JSON block like this so the frontend can render an interactive Property Card:\n```json\n{ \"type\": \"property\", \"propertyId\": \"the-uuid-here\" }\n```");
+            systemMsg.put(CONTENT_KEY, "You are LandLens AI, an expert property verification assistant in India. You help users understand property trust scores, land documents like Patta and Sale Deeds, and verification timelines. Keep your answers concise, helpful, and professional.\n\nIMPORTANT: Use Markdown tables when presenting structured data. If you recommend a specific property and you know its propertyId, you MUST output a JSON block like this so the frontend can render an interactive Property Card:\n```json\n{ \"type\": \"property\", \"propertyId\": \"the-uuid-here\" }\n```");
             
             // Add history
             for (AiMessage msg : history) {
                 ObjectNode msgNode = messagesArray.addObject();
                 String role = msg.getSenderRole().equalsIgnoreCase("USER") ? "user" : "assistant";
                 msgNode.put("role", role);
-                msgNode.put("content", msg.getContent());
+                msgNode.put(CONTENT_KEY, msg.getContent());
             }
 
-            HttpClient client = HttpClient.newBuilder()
+            try (HttpClient client = HttpClient.newBuilder()
                     .connectTimeout(Duration.ofSeconds(15))
-                    .build();
+                    .build()) {
 
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("https://integrate.api.nvidia.com/v1/chat/completions"))
-                    .header("Authorization", "Bearer " + openAiApiKey)
-                    .header("Content-Type", "application/json")
-                    .header("Accept", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
-                    .build();
-
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-            if (response.statusCode() == 200) {
-                JsonNode root = objectMapper.readTree(response.body());
-                aiResponseText = root.path("choices").path(0).path("message").path("content").asText();
-            } else {
-                aiResponseText = "Sorry, I am currently facing technical issues reaching the AI server. Code: " + response.statusCode();
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create("https://integrate.api.nvidia.com/v1/chat/completions"))
+                        .header("Authorization", "Bearer " + openAiApiKey)
+                        .header("Content-Type", "application/json")
+                        .header("Accept", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
+                        .build();
+    
+                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+    
+                if (response.statusCode() == 200) {
+                    JsonNode root = objectMapper.readTree(response.body());
+                    aiResponseText = root.path("choices").path(0).path("message").path(CONTENT_KEY).asText();
+                } else {
+                    aiResponseText = "Sorry, I am currently facing technical issues reaching the AI server. Code: " + response.statusCode();
+                }
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            aiResponseText = "Sorry, your request was interrupted: " + e.getMessage();
         } catch (Exception e) {
             aiResponseText = "Sorry, an internal error occurred while processing your request: " + e.getMessage();
         }

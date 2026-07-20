@@ -67,9 +67,9 @@ echo "Configuring application environment settings..."
 az webapp config appsettings set --resource-group "$RESOURCE_GROUP" --name "$WEB_APP_NAME" --settings \
   SPRING_PROFILES_ACTIVE="prod" \
   WEBSITES_PORT="8080" \
-  DB_URL="jdbc:mysql://srv1117.hstgr.io:3306/u833088220_ll1234?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" \
-  DB_USERNAME="u833088220_ll1234" \
-  DB_PASSWORD="ll12342D" \
+  DB_URL="jdbc:mysql://srv1117.hstgr.io:3306/u833088220_Priya_teamlead?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" \
+  DB_USERNAME="u833088220_Priya_teamlead" \
+  DB_PASSWORD="Priya_teamlead@1234567" \
   JWT_SECRET="9a2f3f4e5d6c7b8a9f0e1d2c3b4a5f6e7d8c9b0a1f2e3d4c5b6a7f8e9d0c1b2a3"
 
 # 9. Output Base URL

@@ -42,9 +42,9 @@ ENV_FILE=".env"
 if [ ! -f "$ENV_FILE" ]; then
     echo "Creating environment file: ${ENV_FILE}..."
     cat <<EOF > "$ENV_FILE"
-DB_URL=jdbc:mysql://mysql:3306/u833088220_ll1234?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&useInformationSchema=true
-DB_USERNAME=u833088220_ll1234
-DB_PASSWORD=ll12342D
+DB_URL=jdbc:mysql://srv1117.hstgr.io:3306/u833088220_Priya_teamlead?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&useInformationSchema=true
+DB_USERNAME=u833088220_Priya_teamlead
+DB_PASSWORD=Priya_teamlead@1234567
 JWT_SECRET=9a2f3f4e5d6c7b8a9f0e1d2c3b4a5f6e7d8c9b0a1f2e3d4c5b6a7f8e9d0c1b2a3
 SPRING_PROFILES_ACTIVE=prod
 EOF
