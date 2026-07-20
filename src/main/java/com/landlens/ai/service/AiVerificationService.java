@@ -41,7 +41,7 @@ import org.slf4j.LoggerFactory;
 @Service
 public class AiVerificationService {
 
-    private static final Logger logger = LoggerFactory.getLogger(AiVerificationService.java);
+    private static final Logger logger = LoggerFactory.getLogger(AiVerificationService.class);
     private static final String REASONING_CONTENT_KEY = "reasoning_content";
 
     @Autowired
