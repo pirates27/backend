@@ -7,6 +7,10 @@ import com.landlens.api.model.ApiLog;
 
 public class ApiMapper {
 
+    private ApiMapper() {
+        throw new IllegalStateException("Utility class");
+    }
+
     public static ApiKeyResponseDto toResponseDto(ApiKey key) {
         if (key == null) {
             return null;

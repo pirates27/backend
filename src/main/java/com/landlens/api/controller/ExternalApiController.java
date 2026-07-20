@@ -38,7 +38,7 @@ public class ExternalApiController {
     private VerificationService verificationService;
 
     @GetMapping("/properties/{code}/verify")
-    public ResponseEntity<?> getExternalVerificationDetails(@PathVariable String code) {
+    public ResponseEntity<Object> getExternalVerificationDetails(@PathVariable String code) {
         Property property = propertyService.getPropertyByCode(code);
         
         Map<String, Object> response = new HashMap<>();
@@ -62,7 +62,7 @@ public class ExternalApiController {
         List<VerificationTimeline> timeline = verificationService.getPropertyTimeline(property.getId());
         List<VerificationTimelineResponseDto> timelineDto = timeline.stream()
                 .map(VerificationMapper::toResponseDto)
-                .collect(Collectors.toList());
+                .toList();
         response.put("timeline", timelineDto);
 
         return ResponseEntity.ok(response);

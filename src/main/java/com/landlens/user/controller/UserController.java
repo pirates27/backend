@@ -51,7 +51,7 @@ public class UserController {
         List<User> users = userService.getAllUsers();
         List<UserResponseDto> list = users.stream()
                 .map(UserMapper::toResponseDto)
-                .collect(Collectors.toList());
+                .toList();
         return ResponseEntity.ok(list);
     }
 }

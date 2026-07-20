@@ -5,6 +5,10 @@ import com.landlens.user.model.User;
 
 public class UserMapper {
 
+    private UserMapper() {
+        throw new IllegalStateException("Utility class");
+    }
+
     public static UserResponseDto toResponseDto(User user) {
         if (user == null) {
             return null;

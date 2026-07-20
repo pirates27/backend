@@ -26,8 +26,7 @@ import java.util.List;
 @EnableMethodSecurity
 public class WebSecurityConfig {
 
-    @Autowired
-    private JwtAuthenticationFilter jwtAuthenticationFilter;
+    // Inject jwtAuthenticationFilter directly into the securityFilterChain method instead of class-level field injection
 
     @Autowired
     private CustomUserDetailsService userDetailsService;
@@ -55,7 +54,7 @@ public class WebSecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         http
             .csrf(AbstractHttpConfigurer::disable)
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))

@@ -27,16 +27,16 @@ public class DeveloperApiController {
     private DeveloperApiService developerApiService;
 
     @PostMapping("/keys")
-    public ResponseEntity<?> createKey(@RequestParam String name, Principal principal) {
+    public ResponseEntity<Object> createKey(@RequestParam String name, Principal principal) {
         UUID userId = UUID.fromString(principal.getName());
         DeveloperApiService.KeyCreationResult result = developerApiService.createApiKey(userId, name);
         
         Map<String, Object> response = new HashMap<>();
-        response.put("apiKeyId", result.apiKey.getId());
-        response.put("name", result.apiKey.getName());
-        response.put("status", result.apiKey.getStatus());
-        response.put("expiryDate", result.apiKey.getExpiryDate());
-        response.put("rawApiKey", result.rawKey);
+        response.put("apiKeyId", result.getApiKey().getId());
+        response.put("name", result.getApiKey().getName());
+        response.put("status", result.getApiKey().getStatus());
+        response.put("expiryDate", result.getApiKey().getExpiryDate());
+        response.put("rawApiKey", result.getRawKey());
 
         return ResponseEntity.ok(response);
     }
@@ -47,12 +47,12 @@ public class DeveloperApiController {
         List<ApiKey> list = developerApiService.getUserApiKeys(userId);
         List<ApiKeyResponseDto> dtoList = list.stream()
                 .map(ApiMapper::toResponseDto)
-                .collect(Collectors.toList());
+                .toList();
         return ResponseEntity.ok(dtoList);
     }
 
     @DeleteMapping("/keys/{id}")
-    public ResponseEntity<?> revokeKey(@PathVariable UUID id, Principal principal) {
+    public ResponseEntity<Object> revokeKey(@PathVariable UUID id, Principal principal) {
         UUID userId = UUID.fromString(principal.getName());
         developerApiService.revokeApiKey(id, userId);
         return ResponseEntity.ok(Map.of("message", "API key revoked successfully"));
@@ -64,7 +64,7 @@ public class DeveloperApiController {
         List<ApiLog> list = developerApiService.getLogsForKey(id, userId);
         List<ApiLogResponseDto> dtoList = list.stream()
                 .map(ApiMapper::toResponseDto)
-                .collect(Collectors.toList());
+                .toList();
         return ResponseEntity.ok(dtoList);
     }
 }

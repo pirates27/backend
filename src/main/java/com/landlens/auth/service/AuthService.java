@@ -22,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import com.landlens.common.exception.ResourceNotFoundException;
+import com.landlens.common.exception.InvalidRequestException;
 
 @Service
 public class AuthService {
@@ -50,11 +52,11 @@ public class AuthService {
     @Transactional
     public User register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email already in use");
+            throw new InvalidRequestException("Email already in use");
         }
 
         Role role = roleRepository.findByName(request.getRole().toUpperCase())
-                .orElseThrow(() -> new RuntimeException("Role not found: " + request.getRole()));
+                .orElseThrow(() -> new ResourceNotFoundException("Role not found: " + request.getRole()));
 
         User user = new User();
         user.setEmail(request.getEmail());
@@ -74,7 +76,7 @@ public class AuthService {
 
         if (userOpt.isEmpty()) {
             // Write a failed login history for dummy tracking
-            throw new RuntimeException("Bad credentials");
+            throw new InvalidRequestException("Bad credentials");
         }
 
         User user = userOpt.get();
@@ -86,7 +88,7 @@ public class AuthService {
             loginHistory.setUserAgent(userAgent);
             loginHistory.setStatus("FAILED");
             loginHistoryRepository.save(loginHistory);
-            throw new RuntimeException("Bad credentials");
+            throw new InvalidRequestException("Bad credentials");
         }
 
         // Save login history
@@ -119,15 +121,15 @@ public class AuthService {
     @Transactional
     public TokenResponse refresh(RefreshTokenRequest request) {
         RefreshToken refreshToken = refreshTokenRepository.findByToken(request.getRefreshToken())
-                .orElseThrow(() -> new RuntimeException("Invalid refresh token"));
+                .orElseThrow(() -> new InvalidRequestException("Invalid refresh token"));
 
         if (refreshToken.getExpiryDate().isBefore(Instant.now())) {
             refreshTokenRepository.delete(refreshToken);
-            throw new RuntimeException("Refresh token expired");
+            throw new InvalidRequestException("Refresh token expired");
         }
 
-        if (refreshToken.getRevoked()) {
-            throw new RuntimeException("Refresh token revoked");
+        if (Boolean.TRUE.equals(refreshToken.getRevoked())) {
+            throw new InvalidRequestException("Refresh token revoked");
         }
 
         User user = refreshToken.getUser();

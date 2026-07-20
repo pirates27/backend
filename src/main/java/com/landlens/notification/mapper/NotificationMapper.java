@@ -5,6 +5,10 @@ import com.landlens.notification.model.Notification;
 
 public class NotificationMapper {
 
+    private NotificationMapper() {
+        throw new IllegalStateException("Utility class");
+    }
+
     public static NotificationResponseDto toResponseDto(Notification notif) {
         if (notif == null) {
             return null;

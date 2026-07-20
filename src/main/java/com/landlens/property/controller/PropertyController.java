@@ -49,7 +49,7 @@ public class PropertyController {
         List<Property> list = propertyService.searchProperties(district, village, state, status, category, minPrice, maxPrice);
         List<PropertyResponseDto> dtoList = list.stream()
                 .map(PropertyMapper::toResponseDto)
-                .collect(Collectors.toList());
+                .toList();
         return ResponseEntity.ok(dtoList);
     }
 
@@ -73,7 +73,7 @@ public class PropertyController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('PROVIDER', 'ADMIN')")
-    public ResponseEntity<?> deleteProperty(@PathVariable UUID id, Principal principal) {
+    public ResponseEntity<Object> deleteProperty(@PathVariable UUID id, Principal principal) {
         UUID providerId = UUID.fromString(principal.getName());
         propertyService.deleteProperty(id, providerId);
         return ResponseEntity.ok("Property listing removed successfully");
@@ -98,7 +98,7 @@ public class PropertyController {
         List<PropertyImage> images = propertyService.getImages(id);
         List<PropertyImageDto> dtoList = images.stream()
                 .map(PropertyMapper::toResponseDto)
-                .collect(Collectors.toList());
+                .toList();
         return ResponseEntity.ok(dtoList);
     }
 
@@ -121,7 +121,7 @@ public class PropertyController {
         List<PropertyVideo> videos = propertyService.getVideos(id);
         List<PropertyVideoDto> dtoList = videos.stream()
                 .map(PropertyMapper::toResponseDto)
-                .collect(Collectors.toList());
+                .toList();
         return ResponseEntity.ok(dtoList);
     }
 
@@ -135,7 +135,7 @@ public class PropertyController {
 
     @DeleteMapping("/{id}/save")
     @PreAuthorize("hasAnyRole('BUYER', 'ADMIN')")
-    public ResponseEntity<?> unsaveProperty(@PathVariable UUID id, Principal principal) {
+    public ResponseEntity<Object> unsaveProperty(@PathVariable UUID id, Principal principal) {
         UUID buyerId = UUID.fromString(principal.getName());
         propertyService.unsaveProperty(id, buyerId);
         return ResponseEntity.ok("Property removed from saved items");
@@ -148,7 +148,7 @@ public class PropertyController {
         List<SavedProperty> saved = propertyService.getSavedProperties(buyerId);
         List<SavedPropertyResponseDto> dtoList = saved.stream()
                 .map(PropertyMapper::toResponseDto)
-                .collect(Collectors.toList());
+                .toList();
         return ResponseEntity.ok(dtoList);
     }
 
@@ -184,7 +184,7 @@ public class PropertyController {
 
         List<PropertyVisitResponseDto> dtoList = list.stream()
                 .map(PropertyMapper::toResponseDto)
-                .collect(Collectors.toList());
+                .toList();
         return ResponseEntity.ok(dtoList);
     }
 

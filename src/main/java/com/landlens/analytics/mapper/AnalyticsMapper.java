@@ -5,6 +5,10 @@ import com.landlens.analytics.model.DailyAnalytics;
 
 public class AnalyticsMapper {
 
+    private AnalyticsMapper() {
+        throw new IllegalStateException("Utility class");
+    }
+
     public static DailyAnalyticsResponseDto toResponseDto(DailyAnalytics analytics) {
         if (analytics == null) {
             return null;

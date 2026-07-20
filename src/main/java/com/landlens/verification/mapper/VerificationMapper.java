@@ -8,6 +8,10 @@ import com.landlens.verification.model.VerificationTimeline;
 
 public class VerificationMapper {
 
+    private VerificationMapper() {
+        throw new IllegalStateException("Utility class");
+    }
+
     public static GovernmentVerificationResponseDto toResponseDto(GovernmentVerification review) {
         if (review == null) {
             return null;

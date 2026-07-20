@@ -45,7 +45,7 @@ public class FraudController {
         List<FraudReport> list = fraudService.getAllReports();
         List<FraudReportResponseDto> dtoList = list.stream()
                 .map(FraudMapper::toResponseDto)
-                .collect(Collectors.toList());
+                .toList();
         return ResponseEntity.ok(dtoList);
     }
 
@@ -54,7 +54,7 @@ public class FraudController {
         List<FraudReport> list = fraudService.getReportsForProperty(id);
         List<FraudReportResponseDto> dtoList = list.stream()
                 .map(FraudMapper::toResponseDto)
-                .collect(Collectors.toList());
+                .toList();
         return ResponseEntity.ok(dtoList);
     }
 
@@ -95,7 +95,7 @@ public class FraudController {
         List<DuplicateClaim> list = fraudService.getDuplicateClaimsForProperty(id);
         List<DuplicateClaimResponseDto> dtoList = list.stream()
                 .map(FraudMapper::toResponseDto)
-                .collect(Collectors.toList());
+                .toList();
         return ResponseEntity.ok(dtoList);
     }
 }

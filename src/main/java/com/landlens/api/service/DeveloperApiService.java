@@ -23,9 +23,13 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import com.landlens.common.exception.ResourceNotFoundException;
+import com.landlens.common.exception.UnauthorizedException;
 
 @Service
 public class DeveloperApiService {
+
+    private static final String STATUS_ACTIVE = "ACTIVE";
 
     @Autowired
     private ApiKeyRepository apiKeyRepository;
@@ -43,19 +47,27 @@ public class DeveloperApiService {
     private UserRepository userRepository;
 
     public static class KeyCreationResult {
-        public ApiKey apiKey;
-        public String rawKey;
+        private final ApiKey apiKey;
+        private final String rawKey;
 
         public KeyCreationResult(ApiKey apiKey, String rawKey) {
             this.apiKey = apiKey;
             this.rawKey = rawKey;
+        }
+
+        public ApiKey getApiKey() {
+            return apiKey;
+        }
+
+        public String getRawKey() {
+            return rawKey;
         }
     }
 
     @Transactional
     public KeyCreationResult createApiKey(UUID userId, String name) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         String prefix = "ll_live_";
         String randomPart = UUID.randomUUID().toString().replace("-", "");
@@ -67,7 +79,7 @@ public class DeveloperApiService {
         apiKey.setKeyHash(hashedKey);
         apiKey.setName(name);
         apiKey.setPrefix(prefix);
-        apiKey.setStatus("ACTIVE");
+        apiKey.setStatus(STATUS_ACTIVE);
         // Expires in 1 year
         apiKey.setExpiryDate(Instant.now().plus(365, ChronoUnit.DAYS));
         apiKey.setIsActive(true);
@@ -86,16 +98,16 @@ public class DeveloperApiService {
     }
 
     public List<ApiKey> getUserApiKeys(UUID userId) {
-        return apiKeyRepository.findByUserIdAndStatus(userId, "ACTIVE");
+        return apiKeyRepository.findByUserIdAndStatus(userId, STATUS_ACTIVE);
     }
 
     @Transactional
     public void revokeApiKey(UUID keyId, UUID userId) {
         ApiKey apiKey = apiKeyRepository.findById(keyId)
-                .orElseThrow(() -> new RuntimeException("API key not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("API key not found"));
 
         if (!apiKey.getUser().getId().equals(userId)) {
-            throw new RuntimeException("Unauthorized: not the owner of this API key");
+            throw new UnauthorizedException("Unauthorized: not the owner of this API key");
         }
 
         apiKey.setStatus("REVOKED");
@@ -105,7 +117,7 @@ public class DeveloperApiService {
     @Transactional
     public ApiKey validateApiKey(String rawKey, int[] statusCodeOut) {
         String hashedKey = hashKey(rawKey);
-        Optional<ApiKey> keyOpt = apiKeyRepository.findByKeyHashAndStatus(hashedKey, "ACTIVE");
+        Optional<ApiKey> keyOpt = apiKeyRepository.findByKeyHashAndStatus(hashedKey, STATUS_ACTIVE);
 
         if (keyOpt.isEmpty()) {
             statusCodeOut[0] = 401;
@@ -123,7 +135,7 @@ public class DeveloperApiService {
 
         // Validate Rate Limit
         ApiRateLimit rateLimit = apiRateLimitRepository.findByApiKeyId(apiKey.getId())
-                .orElseThrow(() -> new RuntimeException("Rate limit configuration missing"));
+                .orElseThrow(() -> new IllegalStateException("Rate limit configuration missing"));
 
         LocalDate today = LocalDate.now();
         ApiUsage usage = apiUsageRepository.findByApiKeyIdAndUsageDate(apiKey.getId(), today)
@@ -165,9 +177,9 @@ public class DeveloperApiService {
 
     public List<ApiLog> getLogsForKey(UUID keyId, UUID userId) {
         ApiKey key = apiKeyRepository.findById(keyId)
-                .orElseThrow(() -> new RuntimeException("API key not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("API key not found"));
         if (!key.getUser().getId().equals(userId)) {
-            throw new RuntimeException("Unauthorized");
+            throw new UnauthorizedException("Unauthorized");
         }
         return apiLogRepository.findByApiKeyId(keyId);
     }
@@ -178,7 +190,7 @@ public class DeveloperApiService {
             byte[] hash = digest.digest(rawKey.getBytes(StandardCharsets.UTF_8));
             return Base64.getEncoder().encodeToString(hash);
         } catch (Exception e) {
-            throw new RuntimeException("SHA-256 digest hashing failed", e);
+            throw new IllegalStateException("SHA-256 digest hashing failed", e);
         }
     }
 }

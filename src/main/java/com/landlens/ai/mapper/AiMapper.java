@@ -9,6 +9,10 @@ import com.landlens.ai.model.AiVerification;
 
 public class AiMapper {
 
+    private AiMapper() {
+        throw new IllegalStateException("Utility class");
+    }
+
     public static AiConversationResponseDto toResponseDto(AiConversation convo) {
         if (convo == null) {
             return null;

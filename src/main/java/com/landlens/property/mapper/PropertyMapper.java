@@ -6,6 +6,10 @@ import com.landlens.user.mapper.UserMapper;
 
 public class PropertyMapper {
 
+    private PropertyMapper() {
+        throw new IllegalStateException("Utility class");
+    }
+
     public static PropertyResponseDto toResponseDto(Property property) {
         if (property == null) {
             return null;

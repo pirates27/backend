@@ -42,7 +42,7 @@ public class DocumentController {
         List<PropertyDocument> list = documentService.getDocuments(id);
         List<PropertyDocumentResponseDto> dtoList = list.stream()
                 .map(DocumentMapper::toResponseDto)
-                .collect(Collectors.toList());
+                .toList();
         return ResponseEntity.ok(dtoList);
     }
 

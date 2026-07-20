@@ -11,6 +11,10 @@ import com.landlens.user.mapper.UserMapper;
 
 public class FraudMapper {
 
+    private FraudMapper() {
+        throw new IllegalStateException("Utility class");
+    }
+
     public static FraudReportResponseDto toResponseDto(FraudReport report) {
         if (report == null) {
             return null;

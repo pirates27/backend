@@ -29,6 +29,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
@@ -167,7 +168,7 @@ public class AiVerificationService {
         return context.toString();
     }
 
-    private String buildRequestBody(String context) throws Exception {
+    private String buildRequestBody(String context) throws JsonProcessingException {
         ObjectNode rootNode = objectMapper.createObjectNode();
         rootNode.put("model", "openai/gpt-oss-120b");
         rootNode.put("temperature", 1);
@@ -184,7 +185,7 @@ public class AiVerificationService {
         return objectMapper.writeValueAsString(rootNode);
     }
 
-    private void parseLlmResponse(String responseBody, AiVerificationResult result) throws Exception {
+    private void parseLlmResponse(String responseBody, AiVerificationResult result) throws JsonProcessingException {
         JsonNode responseNode = objectMapper.readTree(responseBody);
         String content = responseNode.path("choices").get(0).path("message").path("content").asText();
         

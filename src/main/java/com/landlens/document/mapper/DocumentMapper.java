@@ -6,6 +6,10 @@ import com.landlens.document.model.PropertyDocument;
 
 public class DocumentMapper {
 
+    private DocumentMapper() {
+        throw new IllegalStateException("Utility class");
+    }
+
     public static PropertyDocumentResponseDto toResponseDto(PropertyDocument doc) {
         if (doc == null) {
             return null;

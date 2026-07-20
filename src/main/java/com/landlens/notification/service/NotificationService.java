@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import com.landlens.common.exception.ResourceNotFoundException;
+import com.landlens.common.exception.UnauthorizedException;
 
 @Service
 public class NotificationService {
@@ -45,10 +47,10 @@ public class NotificationService {
     @Transactional
     public Notification markAsRead(UUID notificationId, UUID userId) {
         Notification notification = notificationRepository.findById(notificationId)
-                .orElseThrow(() -> new RuntimeException("Notification not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Notification not found"));
         
         if (!notification.getReceiver().getId().equals(userId)) {
-            throw new RuntimeException("Unauthorized to modify this notification");
+            throw new UnauthorizedException("Unauthorized to modify this notification");
         }
 
         notification.setIsRead(true);

@@ -23,7 +23,7 @@ public class AuthController {
     private AuthService authService;
 
     @PostMapping("/register")
-    public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterRequest registerRequest) {
+    public ResponseEntity<Object> registerUser(@Valid @RequestBody RegisterRequest registerRequest) {
         User user = authService.register(registerRequest);
         return ResponseEntity.ok("User registered successfully with ID: " + user.getId());
     }
@@ -53,7 +53,7 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<?> logout(@Valid @RequestBody RefreshTokenRequest refreshTokenRequest) {
+    public ResponseEntity<Object> logout(@Valid @RequestBody RefreshTokenRequest refreshTokenRequest) {
         authService.logout(refreshTokenRequest.getRefreshToken());
         return ResponseEntity.ok("User logged out successfully");
     }

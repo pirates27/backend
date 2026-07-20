@@ -26,7 +26,7 @@ public class NotificationController {
         List<Notification> list = notificationService.getUserNotifications(userId);
         List<NotificationResponseDto> dtoList = list.stream()
                 .map(NotificationMapper::toResponseDto)
-                .collect(Collectors.toList());
+                .toList();
         return ResponseEntity.ok(dtoList);
     }
 

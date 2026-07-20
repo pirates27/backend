@@ -47,7 +47,7 @@ public class VerificationController {
         List<VerificationTimeline> list = verificationService.getPropertyTimeline(id);
         List<VerificationTimelineResponseDto> dtoList = list.stream()
                 .map(VerificationMapper::toResponseDto)
-                .collect(Collectors.toList());
+                .toList();
         return ResponseEntity.ok(dtoList);
     }
 }

@@ -39,7 +39,7 @@ public class AiChatController {
         List<AiConversation> list = aiChatService.getUserConversations(userId);
         List<AiConversationResponseDto> dtoList = list.stream()
                 .map(AiMapper::toResponseDto)
-                .collect(Collectors.toList());
+                .toList();
         return ResponseEntity.ok(dtoList);
     }
 
@@ -59,7 +59,7 @@ public class AiChatController {
         List<AiMessage> messages = aiChatService.getMessages(id);
         List<AiMessageResponseDto> dtoList = messages.stream()
                 .map(AiMapper::toResponseDto)
-                .collect(Collectors.toList());
+                .toList();
         return ResponseEntity.ok(dtoList);
     }
 }
