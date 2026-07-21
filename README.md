@@ -52,7 +52,7 @@ The production application is running live in the AWS Mumbai region. Client requ
 *   **Base URL**: `http://landlens-production-alb-1919392235.ap-south-1.elb.amazonaws.com`
 *   **Health Check (Actuator)**: `http://landlens-production-alb-1919392235.ap-south-1.elb.amazonaws.com/actuator/health`
 *   **Swagger Documentation**: `http://landlens-production-alb-1919392235.ap-south-1.elb.amazonaws.com/swagger-ui/index.html` (Enabled in development, disabled in production for security hardening)
-*   **Production Database (Hostinger)**: `srv1117.hstgr.io:3306` (Schema: `u833088220_LL`, User: `u833088220_LL`)
+*   **Production Database (Hostinger)**: `srv1117.hstgr.io:3306` (Schema: `u833088220_Priya_teamlead`, User: `u833088220_Priya_teamlead`)
 *   **NAT Gateway Public Egress IP**: `13.207.227.126` (Whitelisted in Hostinger Remote MySQL settings)
 
 ---
@@ -345,19 +345,16 @@ LandLens is built cloud-agnostically and supports various deployment workflows:
 
 ### B. AWS ECS Fargate + ALB Infrastructure (Production Blueprint)
 
-The production configuration runs a hybrid Terraform + CodeBuild pipeline that packages and rolls out updates from your command line:
+The production configuration uses a direct Docker build and deployment pipeline that packages and rolls out updates from your command line:
 
 ```mermaid
 graph TD
-    A[Workstation / Source Code] -->|tar.exe Zips Source| B(source.zip)
-    B -->|aws s3 cp| C[S3 Source Bucket]
-    C -->|Triggers| D[AWS CodeBuild]
-    D -->|1. Maven Compile Java 21| E[landlens.jar]
-    E -->|2. Docker build| F[Docker Image]
-    F -->|3. Docker push| G[AWS ECR Repository]
-    G -->|Triggers Redeploy| H[AWS ECS Fargate Cluster]
-    H -->|Drains Old Tasks| I[ECS Tasks in Private Subnet]
-    J[Application Load Balancer] -->|Health Check / Routing| I
+    A[Workstation / Source Code] -->|mvnw clean package| B(landlens.jar)
+    B -->|docker build| C[Docker Image]
+    C -->|docker push| D[AWS ECR Repository]
+    D -->|aws ecs update-service| E[AWS ECS Fargate Cluster]
+    E -->|Drains Old Tasks| F[ECS Tasks in Private Subnet]
+    G[Application Load Balancer] -->|Health Check / Routing| F
 ```
 
 #### Executing AWS Deployment
@@ -373,7 +370,7 @@ Run the automated build & release script from the root directory:
 ./deploy.sh
 ```
 
-The script manages structural initialization via Terraform, bundles your workspace (omitting caches), pushes it to AWS S3, triggers CodeBuild for Compilation/ECR pushing, and enforces zero-downtime rolling updates on ECS Fargate tasks.
+The script manages ECR authentication, bundles your workspace by building the Java JAR and Docker image locally, pushes the container to AWS ECR, and enforces zero-downtime rolling updates on ECS Fargate tasks using the AWS CLI.
 
 ---
 
@@ -462,10 +459,10 @@ Production credentials are encrypted using AWS KMS and managed securely in **AWS
 2.  **Production MySQL Database (Hostinger)**:
     *   **Host**: `srv1117.hstgr.io`
     *   **Port**: `3306`
-    *   **Database Name**: `u833088220_LL`
-    *   **Username**: `u833088220_LL`
-    *   **Password**: `833088220...[MASKED_FOR_SECURITY]...Ll1`
-    *   **JDBC URL**: `jdbc:mysql://srv1117.hstgr.io:3306/u833088220_LL?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&useInformationSchema=true`
+    *   **Database Name**: `u833088220_Priya_teamlead`
+    *   **Username**: `u833088220_Priya_teamlead`
+    *   **Password**: `Priya_teamlead@1234567`
+    *   **JDBC URL**: `jdbc:mysql://srv1117.hstgr.io:3306/u833088220_Priya_teamlead?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&useInformationSchema=true`
 3.  **Secrets Management Commands**:
     *   Retrieve secrets:
         ```powershell

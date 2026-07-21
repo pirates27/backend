@@ -1,7 +1,7 @@
 # ==============================================================================
-# LandLens Windows PowerShell ECS Fargate Deployment Automation Script (CodeBuild)
+# LandLens Windows PowerShell Direct Deployment Automation Script
 # ==============================================================================
-# Add current workspace directory to PATH so local terraform.exe is found
+# Add current workspace directory to PATH
 $scriptDir = $PSScriptRoot
 if ($null -eq $scriptDir -or $scriptDir -eq "") {
     $scriptDir = Get-Location
@@ -17,18 +17,21 @@ if ($null -eq $awsAccountId -or $awsAccountId -eq "") {
     exit 1
 }
 Write-Host "Using AWS Account ID: $awsAccountId" -ForegroundColor Green
+
 $projectName = "landlens"
 $environment = "production"
 $ecrRepoName = "landlens-backend"
-$containerName = "landlens-backend-container"
+$ecsCluster = "landlens-production-cluster"
+$ecsService = "landlens-production-service"
+$albDnsName = "landlens-production-alb-1919392235.ap-south-1.elb.amazonaws.com"
 
 Write-Host "======================================================================" -ForegroundColor Cyan
-Write-Host " Starting LandLens Production Deployment to AWS ECS Fargate via CodeBuild (Windows)" -ForegroundColor Cyan
+Write-Host " Starting LandLens Direct Production Deployment to AWS ECS Fargate (Windows)" -ForegroundColor Cyan
 Write-Host "======================================================================" -ForegroundColor Cyan
 
 # 1. Dependency Checks
-Write-Host "[1/9] Checking tool dependencies..." -ForegroundColor Yellow
-$dependencies = @("aws", "terraform")
+Write-Host "[1/7] Checking tool dependencies..." -ForegroundColor Yellow
+$dependencies = @("aws", "docker", "java")
 foreach ($dep in $dependencies) {
     if (-not (Get-Command $dep -ErrorAction SilentlyContinue)) {
         Write-Error "Required tool '$dep' is not installed or not in your system environment PATH. Please install it to run this script."
@@ -36,87 +39,56 @@ foreach ($dep in $dependencies) {
     }
 }
 
-# 2. Provision AWS Infrastructure via Terraform (First Pass)
-Write-Host "[2/9] Initializing and applying Terraform templates (First Pass)..." -ForegroundColor Yellow
-Push-Location terraform
-terraform init
-terraform apply -auto-approve
-
-# Extract outputs
-$codebuildProject = (terraform output -raw codebuild_project_name).Trim()
-$bucketName = (terraform output -raw codebuild_bucket_name).Trim()
-$albDnsName = (terraform output -raw alb_dns_name).Trim()
-$ecsCluster = (terraform output -raw ecs_cluster_name).Trim()
-$ecsService = (terraform output -raw ecs_service_name).Trim()
-Pop-Location
-
-Write-Host "Infrastructure resources verified." -ForegroundColor Green
-
-# 3. Zip Application Source Code
-Write-Host "[3/9] Compressing project source code..." -ForegroundColor Yellow
-if (Test-Path "source.zip") {
-    Remove-Item "source.zip" -Force
-}
-& tar -a -c -f source.zip --exclude=target --exclude=.git --exclude=.terraform --exclude=source.zip --exclude=terraform.exe --exclude=terraform .
-Write-Host "Source zipped successfully: source.zip" -ForegroundColor Green
-
-# 4. Upload Source to S3
-Write-Host "[4/9] Uploading source bundle to S3 bucket ($bucketName)..." -ForegroundColor Yellow
-aws s3 cp source.zip "s3://$bucketName/source.zip" --region $awsRegion
-
-# 5. Trigger AWS CodeBuild Job
-Write-Host "[5/9] Triggering AWS CodeBuild build..." -ForegroundColor Yellow
-$buildResult = aws codebuild start-build --project-name $codebuildProject --region $awsRegion | ConvertFrom-Json
-$buildId = $buildResult.build.id
-
-Write-Host "Build started with ID: $buildId" -ForegroundColor Green
-Write-Host "Polling build status (this may take 2-4 minutes)..." -ForegroundColor Yellow
-
-$buildSuccess = $false
-for ($i = 1; $i -le 60; $i++) {
-    Start-Sleep -Seconds 10
-    $statusCheck = aws codebuild batch-get-builds --ids $buildId --region $awsRegion | ConvertFrom-Json
-    $buildStatus = $statusCheck.builds[0].buildStatus
-    
-    if ($buildStatus -eq "SUCCEEDED") {
-        Write-Host "`nAWS CodeBuild build completed successfully!" -ForegroundColor Green
-        $buildSuccess = $true
-        break
-    } elseif ($buildStatus -eq "FAILED" -or $buildStatus -eq "FAULT" -or $buildStatus -eq "STOPPED") {
-        Write-Error "`nAWS CodeBuild build failed with status: $buildStatus"
-        exit 1
-    }
-    
-    Write-Host -NoNewline "."
-}
-
-if (-not $buildSuccess) {
-    Write-Error "`nAWS CodeBuild build timed out."
+# 2. Authenticate Docker with AWS ECR
+Write-Host "[2/7] Authenticating Docker to AWS ECR..." -ForegroundColor Yellow
+$ecrUrl = "$awsAccountId.dkr.ecr.$awsRegion.amazonaws.com"
+aws ecr get-login-password --region $awsRegion | docker login --username AWS --password-stdin $ecrUrl
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to authenticate with AWS ECR."
     exit 1
 }
 
-# Clean up zip
-if (Test-Path "source.zip") {
-    Remove-Item "source.zip" -Force
+# 3. Build JAR File locally with Maven Wrapper
+Write-Host "[3/7] Building JAR with Maven..." -ForegroundColor Yellow
+& .\mvnw.cmd clean package -DskipTests
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Maven build failed."
+    exit 1
 }
 
-# 6. Apply Terraform Infrastructure (Second Pass to ensure everything links properly)
-Write-Host "[6/9] Applying Terraform templates (Second Pass)..." -ForegroundColor Yellow
-Push-Location terraform
-terraform apply -auto-approve
-Pop-Location
+# 4. Build Docker Image
+Write-Host "[4/7] Building Docker Image..." -ForegroundColor Yellow
+docker build -t $ecrRepoName .
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Docker build failed."
+    exit 1
+}
 
-# 7. Force ECS Deployment
-Write-Host "[7/9] Triggering ECS service redeployment..." -ForegroundColor Yellow
+# 5. Tag and Push to ECR
+Write-Host "[5/7] Tagging and Pushing to ECR..." -ForegroundColor Yellow
+$imageUri = "$ecrUrl/$ecrRepoName:latest"
+docker tag "${ecrRepoName}:latest" $imageUri
+docker push $imageUri
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to push image to ECR."
+    exit 1
+}
+
+# 6. Force ECS Deployment
+Write-Host "[6/7] Triggering ECS service redeployment..." -ForegroundColor Yellow
 aws ecs update-service --cluster $ecsCluster --service $ecsService --force-new-deployment --region $awsRegion | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to trigger ECS deployment."
+    exit 1
+}
 
-# 8. Wait for ECS Fargate Deployment
-Write-Host "[8/9] Waiting for ECS Fargate deployment to stabilize (this may take a few minutes)..." -ForegroundColor Yellow
+# 7. Wait for ECS Fargate Deployment
+Write-Host "[7/7] Waiting for ECS Fargate deployment to stabilize (this may take a few minutes)..." -ForegroundColor Yellow
 aws ecs wait services-stable --cluster $ecsCluster --services $ecsService --region $awsRegion
 Write-Host "ECS Service is stable and running." -ForegroundColor Green
 
-# 9. Verify Health Check
-Write-Host "[9/9] Verifying Actuator Health Check..." -ForegroundColor Yellow
+# Verify Health Check
+Write-Host "`nVerifying Actuator Health Check..." -ForegroundColor Yellow
 $baseUrl = "http://$albDnsName"
 $healthUrl = "$baseUrl/actuator/health"
 Write-Host "Querying: $healthUrl" -ForegroundColor Cyan
